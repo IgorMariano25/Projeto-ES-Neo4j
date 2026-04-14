@@ -14,18 +14,14 @@
 #   3. Medidas de posição relativa (quartis, percentis, boxplots)
 #   4. Construção de gráficos (histogramas, boxplots, dispersão, barras)
 #   5. Avaliação de outliers
-#   6. Testes de normalidade (Shapiro-Wilk, Lilliefors)
-#   7. Coeficientes de correlação (Pearson e Spearman)
-#   8. Análise de multicolinearidade (VIF)
-#   9. Modelagem estatística (Regressão Logística com cost-sensitive weights)
-#  10. Validação cruzada (LOOCV)
-#  11. Métricas de avaliação (ROC, PR, F1, MCC, etc.)
+#   6. Testes de normalidade (Shapiro-Wilk, Kolmogorov-Smirnov)
+#   7. Coeficientes de correlação (PerformanceAnalytics)
+#   8. Modelagem estatística (Regressão Logística)
 # =============================================================================
 
 # --- Instalação e carregamento de pacotes ---
 pacotes <- c("ggplot2", "dplyr", "tidyr", "corrplot",
-             "PerformanceAnalytics", "gridExtra", "scales", "car",
-             "nortest", "pROC", "caret", "PRROC")
+             "PerformanceAnalytics", "gridExtra", "scales", "car")
 
 for (p in pacotes) {
   if (!requireNamespace(p, quietly = TRUE)) {
@@ -35,8 +31,8 @@ for (p in pacotes) {
 }
 
 # --- Configuração de diretórios ---
-dir_dataset <- "dataset"
-dir_figuras <- "figuras"
+dir_dataset <- "../dataset"
+dir_figuras <- "../figuras"
 if (!dir.exists(dir_figuras)) dir.create(dir_figuras, recursive = TRUE)
 
 cat("=================================================================\n")
@@ -64,20 +60,25 @@ cols_class <- c("WMC", "CBO", "RFC", "LCOM5", "DIT", "NOC",
                 "CC", "CD", "CLOC", "NA.", "WarningInfo",
                 "WarningMajor", "Number.of.bugs")
 
+# Verificar nomes reais das colunas (R substitui espaços por pontos)
 real_names <- names(df_class)
+# NA é palavra reservada em R, verificar se é "NA." ou outro nome
 cat("  Verificando nomes de colunas...\n")
 
+# Ajustar nome de NA (pode ser NA. no R)
 if ("NA." %in% real_names) {
   cols_class[which(cols_class == "NA.")] <- "NA."
 } else if ("NA" %in% real_names) {
   cols_class[which(cols_class == "NA.")] <- "NA"
 }
 
+# Verificar disponibilidade
 available_class <- cols_class[cols_class %in% real_names]
 missing_cols <- cols_class[!cols_class %in% real_names]
 if (length(missing_cols) > 0) {
   cat(sprintf("  AVISO: Colunas não encontradas: %s\n",
               paste(missing_cols, collapse = ", ")))
+  # Tentar encontrar correspondência
   for (mc in missing_cols) {
     candidates <- grep(gsub("\\.", ".*", mc), real_names,
                        value = TRUE, ignore.case = TRUE)
@@ -89,6 +90,8 @@ if (length(missing_cols) > 0) {
 }
 
 dc <- df_class[, available_class, drop = FALSE]
+
+# Criar variável Bug_class binária
 dc$Bug_class <- ifelse(df_class$Number.of.bugs > 0, 1, 0)
 dc$Bug_class <- as.factor(dc$Bug_class)
 
@@ -96,6 +99,7 @@ cat(sprintf("  Colunas selecionadas (Class): %d\n", ncol(dc)))
 cat(sprintf("  Colunas: %s\n\n", paste(names(dc), collapse = ", ")))
 
 # Seleção de colunas (File-level)
+# CLOC é constante (tudo zero) no File-level, excluir
 cols_file <- c("McCC", "LLOC",
                "Number.of.previous.modifications",
                "Number.of.previous.fixes",
@@ -126,11 +130,12 @@ cat("=================================================================\n")
 cat("2. MEDIDAS DE TENDÊNCIA CENTRAL\n")
 cat("=================================================================\n\n")
 
+# Função para calcular moda
 calc_moda <- function(x) {
   ux <- unique(x)
   tab <- tabulate(match(x, ux))
   modas <- ux[tab == max(tab)]
-  if (length(modas) == length(ux)) return(NA)
+  if (length(modas) == length(ux)) return(NA)  # sem moda clara
   return(paste(modas, collapse = ", "))
 }
 
@@ -199,7 +204,7 @@ cat(paste(rep("-", 85), collapse = ""), "\n")
 for (col in num_cols_class) {
   q <- quantile(dc[[col]], probs = c(0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95),
                 na.rm = TRUE)
-  iqr_val <- q[5] - q[3]
+  iqr_val <- q[5] - q[3]  # Q3 - Q1
   cat(sprintf("%-15s %8.2f %8.2f %8.2f %8.2f %8.2f %8.2f %8.2f %8.2f\n",
               col, q[1], q[2], q[3], q[4], q[5], q[6], q[7], iqr_val))
 }
@@ -223,7 +228,7 @@ cat("\n=================================================================\n")
 cat("5. CONSTRUÇÃO DE GRÁFICOS\n")
 cat("=================================================================\n\n")
 
-# --- 5.1 Histogramas (Class-level) ---
+# --- 5.1 Histogramas (Class-level - métricas principais) ---
 cat("  Gerando histogramas (Class-level)...\n")
 
 metricas_hist <- c("WMC", "CBO", "RFC", "LOC", "LLOC", "NOS", "NM", "LCOM5")
@@ -232,7 +237,7 @@ metricas_hist <- metricas_hist[metricas_hist %in% names(dc)]
 plots_hist <- list()
 for (i in seq_along(metricas_hist)) {
   col <- metricas_hist[i]
-  plots_hist[[i]] <- ggplot(dc, aes(x = .data[[col]])) +
+  plots_hist[[i]] <- ggplot(dc, aes_string(x = col)) +
     geom_histogram(bins = 50, fill = "#2196F3", color = "white", alpha = 0.8) +
     labs(title = col, x = col, y = "Frequência") +
     theme_minimal(base_size = 10) +
@@ -258,7 +263,7 @@ plots_hist_file <- list()
 for (i in seq_along(metricas_hist_file)) {
   col <- metricas_hist_file[i]
   label <- gsub("\\.", " ", col)
-  plots_hist_file[[i]] <- ggplot(df, aes(x = .data[[col]])) +
+  plots_hist_file[[i]] <- ggplot(df, aes_string(x = col)) +
     geom_histogram(bins = 50, fill = "#4CAF50", color = "white", alpha = 0.8) +
     labs(title = label, x = label, y = "Frequência") +
     theme_minimal(base_size = 10) +
@@ -281,7 +286,7 @@ metricas_box <- metricas_box[metricas_box %in% names(dc)]
 plots_box <- list()
 for (i in seq_along(metricas_box)) {
   col <- metricas_box[i]
-  plots_box[[i]] <- ggplot(dc, aes(y = .data[[col]])) +
+  plots_box[[i]] <- ggplot(dc, aes_string(y = col)) +
     geom_boxplot(fill = "#FF9800", color = "#333333", alpha = 0.7,
                  outlier.color = "red", outlier.size = 0.5) +
     labs(title = col, y = col) +
@@ -309,7 +314,7 @@ plots_box_file <- list()
 for (i in seq_along(metricas_box_file)) {
   col <- metricas_box_file[i]
   label <- gsub("\\.", " ", col)
-  plots_box_file[[i]] <- ggplot(df, aes(y = .data[[col]])) +
+  plots_box_file[[i]] <- ggplot(df, aes_string(y = col)) +
     geom_boxplot(fill = "#9C27B0", color = "#333333", alpha = 0.7,
                  outlier.color = "red", outlier.size = 0.5) +
     labs(title = label, y = label) +
@@ -324,7 +329,7 @@ do.call(grid.arrange, c(plots_box_file, ncol = 3))
 dev.off()
 cat("  -> boxplots_file.png salvo\n")
 
-# --- 5.5 Gráfico de dispersão: LOC vs WMC ---
+# --- 5.5 Gráfico de dispersão: LOC vs WMC (Class-level) ---
 cat("  Gerando gráfico de dispersão LOC vs WMC...\n")
 
 if (all(c("LOC", "WMC") %in% names(dc))) {
@@ -346,7 +351,7 @@ if (all(c("LOC", "WMC") %in% names(dc))) {
   cat("  -> dispersao_loc_wmc.png salvo\n")
 }
 
-# --- 5.6 Gráfico de dispersão: CBO vs RFC ---
+# --- 5.6 Gráfico de dispersão: CBO vs RFC (Class-level) ---
 cat("  Gerando gráfico de dispersão CBO vs RFC...\n")
 
 if (all(c("CBO", "RFC") %in% names(dc))) {
@@ -461,25 +466,23 @@ for (col in num_cols_file) {
 }
 
 # =============================================================================
-# 7. TESTES DE NORMALIDADE (Shapiro-Wilk + Lilliefors)
+# 7. TESTES DE NORMALIDADE
 # =============================================================================
 cat("\n=================================================================\n")
 cat("7. TESTES DE NORMALIDADE\n")
 cat("=================================================================\n\n")
 
-# Shapiro-Wilk: máximo 5000 amostras; seed=42 para reprodutibilidade
-# Lilliefors: corrige o viés do K-S com parâmetros estimados da amostra.
-#   O K-S clássico com parâmetros estimados é anticonservativo (rejeita demais).
-# NOTA: K-S original comentado para referência:
-#   ks <- ks.test(x, "pnorm", mean(x), sd(x))  # ANTICONSERVATIVO
+# Shapiro-Wilk (máximo 5000 amostras)
+# Kolmogorov-Smirnov (sem limite)
 
 cat("--- Dataset Class-level ---\n")
 cat(sprintf("%-18s %12s %12s %12s %12s %10s\n",
-            "Variável", "SW Stat", "SW p-valor", "Lill Stat", "Lill p-valor", "Normal?"))
+            "Variável", "SW Stat", "SW p-valor", "KS Stat", "KS p-valor", "Normal?"))
 cat(paste(rep("-", 80), collapse = ""), "\n")
 
 for (col in num_cols_class) {
   x <- dc[[col]]
+  # Shapiro-Wilk (amostra de 5000 se necessário)
   n <- length(x)
   if (n > 5000) {
     set.seed(42)
@@ -489,24 +492,24 @@ for (col in num_cols_class) {
   }
 
   sw <- tryCatch(shapiro.test(x_sample), error = function(e) NULL)
-  lill <- tryCatch(lillie.test(x), error = function(e) NULL)
+  ks <- tryCatch(ks.test(x, "pnorm", mean(x), sd(x)), error = function(e) NULL)
 
   sw_stat <- ifelse(!is.null(sw), sprintf("%.6f", sw$statistic), "N/A")
   sw_p    <- ifelse(!is.null(sw), sprintf("%.2e", sw$p.value), "N/A")
-  lill_stat <- ifelse(!is.null(lill), sprintf("%.6f", lill$statistic), "N/A")
-  lill_p    <- ifelse(!is.null(lill), sprintf("%.2e", lill$p.value), "N/A")
+  ks_stat <- ifelse(!is.null(ks), sprintf("%.6f", ks$statistic), "N/A")
+  ks_p    <- ifelse(!is.null(ks), sprintf("%.2e", ks$p.value), "N/A")
 
   normal <- "Não"
   if (!is.null(sw) && sw$p.value > 0.05) normal <- "Sim"
 
   cat(sprintf("%-18s %12s %12s %12s %12s %10s\n",
-              col, sw_stat, sw_p, lill_stat, lill_p, normal))
+              col, sw_stat, sw_p, ks_stat, ks_p, normal))
 }
 
 cat("\n--- Dataset File-level ---\n")
 cat(sprintf("%-35s %12s %12s %12s %12s %10s\n",
-            "Variável", "SW Stat", "SW p-valor", "Lill Stat", "Lill p-valor", "Normal?"))
-cat(paste(rep("-", 110), collapse = ""), "\n")
+            "Variável", "SW Stat", "SW p-valor", "KS Stat", "KS p-valor", "Normal?"))
+cat(paste(rep("-", 97), collapse = ""), "\n")
 
 for (col in num_cols_file) {
   x <- df[[col]]
@@ -519,62 +522,52 @@ for (col in num_cols_file) {
   }
 
   sw <- tryCatch(shapiro.test(x_sample), error = function(e) NULL)
-  lill <- tryCatch(lillie.test(x), error = function(e) NULL)
+  ks <- tryCatch(ks.test(x, "pnorm", mean(x), sd(x)), error = function(e) NULL)
 
   sw_stat <- ifelse(!is.null(sw), sprintf("%.6f", sw$statistic), "N/A")
   sw_p    <- ifelse(!is.null(sw), sprintf("%.2e", sw$p.value), "N/A")
-  lill_stat <- ifelse(!is.null(lill), sprintf("%.6f", lill$statistic), "N/A")
-  lill_p    <- ifelse(!is.null(lill), sprintf("%.2e", lill$p.value), "N/A")
+  ks_stat <- ifelse(!is.null(ks), sprintf("%.6f", ks$statistic), "N/A")
+  ks_p    <- ifelse(!is.null(ks), sprintf("%.2e", ks$p.value), "N/A")
 
   normal <- "Não"
   if (!is.null(sw) && sw$p.value > 0.05) normal <- "Sim"
 
   cat(sprintf("%-35s %12s %12s %12s %12s %10s\n",
-              col, sw_stat, sw_p, lill_stat, lill_p, normal))
+              col, sw_stat, sw_p, ks_stat, ks_p, normal))
 }
 
 # =============================================================================
-# 8. COEFICIENTES DE CORRELAÇÃO (Pearson e Spearman)
+# 8. COEFICIENTES DE CORRELAÇÃO (chart.Correlation)
 # =============================================================================
 cat("\n=================================================================\n")
-cat("8. COEFICIENTES DE CORRELAÇÃO (Pearson e Spearman)\n")
+cat("8. COEFICIENTES DE CORRELAÇÃO\n")
 cat("=================================================================\n\n")
 
-# --- 8.1 Matrizes de correlação (Class-level) ---
-cat("  Gerando matrizes de correlação (Class-level)...\n")
+# --- 8.1 Matriz de correlação (Class-level) ---
+cat("  Gerando matriz de correlação (Class-level)...\n")
 
+# Selecionar subconjunto para visualização legível
 corr_cols_class <- c("WMC", "CBO", "RFC", "LCOM5", "LOC", "LLOC",
                      "NOS", "NM", "DIT", "NL", "CC", "CD")
 corr_cols_class <- corr_cols_class[corr_cols_class %in% names(dc)]
 
-cor_pearson_class <- cor(dc[, corr_cols_class], use = "complete.obs", method = "pearson")
-cor_spearman_class <- cor(dc[, corr_cols_class], use = "complete.obs", method = "spearman")
+cor_matrix_class <- cor(dc[, corr_cols_class], use = "complete.obs")
 
-# Heatmap Pearson - Class
+# Heatmap com corrplot
 png(file.path(dir_figuras, "correlacao_heatmap_class.png"),
     width = 1000, height = 900, res = 150)
-corrplot(cor_pearson_class, method = "color", type = "upper",
+corrplot(cor_matrix_class, method = "color", type = "upper",
          tl.col = "black", tl.srt = 45, addCoef.col = "black",
          number.cex = 0.7, cl.cex = 0.8,
-         title = "Correlação de Pearson - Class-level",
+         title = "Matriz de Correlação - Class-level",
          mar = c(0, 0, 2, 0))
 dev.off()
 cat("  -> correlacao_heatmap_class.png salvo\n")
 
-# Heatmap Spearman - Class
-png(file.path(dir_figuras, "correlacao_spearman_class.png"),
-    width = 1000, height = 900, res = 150)
-corrplot(cor_spearman_class, method = "color", type = "upper",
-         tl.col = "black", tl.srt = 45, addCoef.col = "black",
-         number.cex = 0.7, cl.cex = 0.8,
-         title = "Correlação de Spearman - Class-level",
-         mar = c(0, 0, 2, 0))
-dev.off()
-cat("  -> correlacao_spearman_class.png salvo\n")
-
-# --- 8.2 chart.Correlation (Pearson) - Class-level ---
+# --- 8.2 chart.Correlation (PerformanceAnalytics) - Class-level ---
 cat("  Gerando chart.Correlation (Class-level)...\n")
 
+# Selecionar 6 métricas principais para legibilidade
 perf_cols <- c("WMC", "CBO", "RFC", "LOC", "LCOM5", "NOS")
 perf_cols <- perf_cols[perf_cols %in% names(dc)]
 
@@ -585,34 +578,21 @@ chart.Correlation(dc[, perf_cols], histogram = TRUE, pch = 19,
 dev.off()
 cat("  -> chart_correlation_class.png salvo\n")
 
-# --- 8.3 Matrizes de correlação (File-level) ---
-cat("  Gerando matrizes de correlação (File-level)...\n")
+# --- 8.3 Matriz de correlação (File-level) ---
+cat("  Gerando matriz de correlação (File-level)...\n")
 
 corr_cols_file <- num_cols_file[num_cols_file != "Number.of.bugs"]
-cor_pearson_file <- cor(df[, corr_cols_file], use = "complete.obs", method = "pearson")
-cor_spearman_file <- cor(df[, corr_cols_file], use = "complete.obs", method = "spearman")
+cor_matrix_file <- cor(df[, corr_cols_file], use = "complete.obs")
 
-# Heatmap Pearson - File
 png(file.path(dir_figuras, "correlacao_heatmap_file.png"),
     width = 900, height = 800, res = 150)
-corrplot(cor_pearson_file, method = "color", type = "upper",
+corrplot(cor_matrix_file, method = "color", type = "upper",
          tl.col = "black", tl.srt = 45, addCoef.col = "black",
          number.cex = 0.7, cl.cex = 0.8,
-         title = "Correlação de Pearson - File-level",
+         title = "Matriz de Correlação - File-level",
          mar = c(0, 0, 2, 0))
 dev.off()
 cat("  -> correlacao_heatmap_file.png salvo\n")
-
-# Heatmap Spearman - File
-png(file.path(dir_figuras, "correlacao_spearman_file.png"),
-    width = 900, height = 800, res = 150)
-corrplot(cor_spearman_file, method = "color", type = "upper",
-         tl.col = "black", tl.srt = 45, addCoef.col = "black",
-         number.cex = 0.7, cl.cex = 0.8,
-         title = "Correlação de Spearman - File-level",
-         mar = c(0, 0, 2, 0))
-dev.off()
-cat("  -> correlacao_spearman_file.png salvo\n")
 
 # --- 8.4 chart.Correlation (File-level) ---
 cat("  Gerando chart.Correlation (File-level)...\n")
@@ -628,285 +608,65 @@ chart.Correlation(df[, perf_cols_file], histogram = TRUE, pch = 19,
 dev.off()
 cat("  -> chart_correlation_file.png salvo\n")
 
-# --- 8.5 Interpretação das correlações Pearson (Class-level) ---
-cat("\n  Interpretação das correlações Pearson (Class-level):\n")
-for (i in 1:(ncol(cor_pearson_class) - 1)) {
-  for (j in (i + 1):ncol(cor_pearson_class)) {
-    r <- cor_pearson_class[i, j]
+# --- 8.5 Interpretação das correlações ---
+cat("\n  Interpretação das correlações (Class-level):\n")
+for (i in 1:(ncol(cor_matrix_class) - 1)) {
+  for (j in (i + 1):ncol(cor_matrix_class)) {
+    r <- cor_matrix_class[i, j]
     strength <- if (abs(r) >= 0.7) "FORTE"
                 else if (abs(r) >= 0.4) "MODERADA"
                 else "FRACA"
     if (abs(r) >= 0.4) {
       cat(sprintf("    %s x %s: r = %.4f [%s]\n",
-                  rownames(cor_pearson_class)[i],
-                  colnames(cor_pearson_class)[j], r, strength))
+                  rownames(cor_matrix_class)[i],
+                  colnames(cor_matrix_class)[j], r, strength))
     }
   }
 }
 
-# --- 8.6 Interpretação das correlações Spearman (Class-level) ---
-cat("\n  Interpretação das correlações Spearman (Class-level):\n")
-for (i in 1:(ncol(cor_spearman_class) - 1)) {
-  for (j in (i + 1):ncol(cor_spearman_class)) {
-    rho <- cor_spearman_class[i, j]
-    strength <- if (abs(rho) >= 0.7) "FORTE"
-                else if (abs(rho) >= 0.4) "MODERADA"
-                else "FRACA"
-    if (abs(rho) >= 0.4) {
-      cat(sprintf("    %s x %s: rho = %.4f [%s]\n",
-                  rownames(cor_spearman_class)[i],
-                  colnames(cor_spearman_class)[j], rho, strength))
-    }
-  }
-}
-
-cat("\n  Interpretação das correlações Pearson (File-level):\n")
-for (i in 1:(ncol(cor_pearson_file) - 1)) {
-  for (j in (i + 1):ncol(cor_pearson_file)) {
-    r <- cor_pearson_file[i, j]
+cat("\n  Interpretação das correlações (File-level):\n")
+for (i in 1:(ncol(cor_matrix_file) - 1)) {
+  for (j in (i + 1):ncol(cor_matrix_file)) {
+    r <- cor_matrix_file[i, j]
     strength <- if (abs(r) >= 0.7) "FORTE"
                 else if (abs(r) >= 0.4) "MODERADA"
                 else "FRACA"
     if (abs(r) >= 0.3) {
       cat(sprintf("    %s x %s: r = %.4f [%s]\n",
-                  rownames(cor_pearson_file)[i],
-                  colnames(cor_pearson_file)[j], r, strength))
-    }
-  }
-}
-
-cat("\n  Interpretação das correlações Spearman (File-level):\n")
-for (i in 1:(ncol(cor_spearman_file) - 1)) {
-  for (j in (i + 1):ncol(cor_spearman_file)) {
-    rho <- cor_spearman_file[i, j]
-    strength <- if (abs(rho) >= 0.7) "FORTE"
-                else if (abs(rho) >= 0.4) "MODERADA"
-                else "FRACA"
-    if (abs(rho) >= 0.3) {
-      cat(sprintf("    %s x %s: rho = %.4f [%s]\n",
-                  rownames(cor_spearman_file)[i],
-                  colnames(cor_spearman_file)[j], rho, strength))
+                  rownames(cor_matrix_file)[i],
+                  colnames(cor_matrix_file)[j], r, strength))
     }
   }
 }
 
 # =============================================================================
-# 9. ANÁLISE DE MULTICOLINEARIDADE (VIF)
+# 9. MODELAGEM ESTATÍSTICA - REGRESSÃO LOGÍSTICA
 # =============================================================================
 cat("\n=================================================================\n")
-cat("9. ANÁLISE DE MULTICOLINEARIDADE (VIF)\n")
+cat("9. MODELAGEM ESTATÍSTICA - REGRESSÃO LOGÍSTICA\n")
 cat("=================================================================\n\n")
 
-# --- 9.1 VIF para preditores do modelo Class-level ---
-cat("--- VIF - Class-level (preditores da regressão logística) ---\n")
-
-pred_class_all <- c("WMC", "CBO", "RFC", "LOC", "LCOM5", "NL", "DIT", "CC")
-pred_class_all <- pred_class_all[pred_class_all %in% names(dc)]
-
-formula_vif_class <- as.formula(paste("Bug_class ~",
-                                      paste(pred_class_all, collapse = " + ")))
-model_vif_class <- glm(formula_vif_class, data = dc, family = binomial)
-vif_class <- car::vif(model_vif_class)
-cat("  VIF dos preditores originais:\n")
-print(round(vif_class, 2))
-
-# Remoção iterativa de variáveis com VIF > 10
-high_vif <- names(vif_class[vif_class > 10])
-if (length(high_vif) > 0) {
-  cat(sprintf("\n  ALERTA: Variáveis com VIF > 10 (multicolinearidade severa): %s\n",
-              paste(high_vif, collapse = ", ")))
-  cat("  Removendo variáveis com VIF > 10 iterativamente...\n\n")
-
-  pred_class_reduced <- pred_class_all
-  repeat {
-    formula_temp <- as.formula(paste("Bug_class ~",
-                                     paste(pred_class_reduced, collapse = " + ")))
-    model_temp <- glm(formula_temp, data = dc, family = binomial)
-    vif_temp <- car::vif(model_temp)
-    if (all(vif_temp <= 10)) break
-    worst <- names(which.max(vif_temp))
-    cat(sprintf("  Removendo '%s' (VIF = %.2f)\n", worst, max(vif_temp)))
-    pred_class_reduced <- pred_class_reduced[pred_class_reduced != worst]
-  }
-  cat(sprintf("\n  Preditores finais após remoção de VIF > 10: %s\n",
-              paste(pred_class_reduced, collapse = ", ")))
-  vif_class_final <- vif_temp
-  cat("  VIF finais:\n")
-  print(round(vif_class_final, 2))
-} else {
-  pred_class_reduced <- pred_class_all
-  vif_class_final <- vif_class
-  cat("  Nenhuma variável com VIF > 10.\n")
-}
-
-# --- 9.2 VIF para preditores do modelo File-level ---
-cat("\n--- VIF - File-level ---\n")
-
-pred_file_all <- c("McCC", "LLOC",
-                   "Number.of.previous.modifications",
-                   "Number.of.previous.fixes",
-                   "Number.of.committers",
-                   "Number.of.developer.commits")
-pred_file_all <- pred_file_all[pred_file_all %in% names(df)]
-
-formula_vif_file <- as.formula(paste("Bug_class ~",
-                                     paste(pred_file_all, collapse = " + ")))
-model_vif_file <- glm(formula_vif_file, data = df, family = binomial)
-vif_file <- car::vif(model_vif_file)
-cat("  VIF dos preditores originais:\n")
-print(round(vif_file, 2))
-
-high_vif_f <- names(vif_file[vif_file > 10])
-if (length(high_vif_f) > 0) {
-  cat(sprintf("\n  ALERTA: Variáveis com VIF > 10: %s\n",
-              paste(high_vif_f, collapse = ", ")))
-  pred_file_reduced <- pred_file_all
-  repeat {
-    formula_temp <- as.formula(paste("Bug_class ~",
-                                     paste(pred_file_reduced, collapse = " + ")))
-    model_temp <- glm(formula_temp, data = df, family = binomial)
-    vif_temp <- car::vif(model_temp)
-    if (all(vif_temp <= 10)) break
-    worst <- names(which.max(vif_temp))
-    cat(sprintf("  Removendo '%s' (VIF = %.2f)\n", worst, max(vif_temp)))
-    pred_file_reduced <- pred_file_reduced[pred_file_reduced != worst]
-  }
-  cat(sprintf("\n  Preditores finais File-level: %s\n",
-              paste(pred_file_reduced, collapse = ", ")))
-  vif_file_final <- vif_temp
-  print(round(vif_file_final, 2))
-} else {
-  pred_file_reduced <- pred_file_all
-  vif_file_final <- vif_file
-  cat("  Nenhuma variável com VIF > 10.\n")
-}
-
-# --- 9.3 Gráfico de VIF ---
-cat("\n  Gerando gráfico de VIF...\n")
-
-vif_df_class <- data.frame(
-  Variavel = names(vif_class),
-  VIF = as.numeric(vif_class),
-  Dataset = "Class-level"
-)
-vif_df_file <- data.frame(
-  Variavel = names(vif_file),
-  VIF = as.numeric(vif_file),
-  Dataset = "File-level"
-)
-vif_df_all <- rbind(vif_df_class, vif_df_file)
-
-# Abreviar nomes longos para o gráfico
-vif_df_all$Label <- gsub("Number\\.of\\.", "N.", vif_df_all$Variavel)
-vif_df_all$Label <- gsub("previous\\.", "prev.", vif_df_all$Label)
-vif_df_all$Label <- gsub("modifications", "mods", vif_df_all$Label)
-vif_df_all$Label <- gsub("developer\\.", "dev.", vif_df_all$Label)
-
-png(file.path(dir_figuras, "vif_barplot.png"),
-    width = 1200, height = 600, res = 150)
-print(
-  ggplot(vif_df_all, aes(x = reorder(Label, VIF), y = VIF, fill = Dataset)) +
-    geom_bar(stat = "identity", position = "dodge", alpha = 0.85) +
-    geom_hline(yintercept = 10, linetype = "dashed", color = "red", linewidth = 0.8) +
-    geom_hline(yintercept = 5, linetype = "dashed", color = "orange", linewidth = 0.5) +
-    annotate("text", x = 0.5, y = 10.5, label = "VIF = 10 (severo)",
-             color = "red", hjust = 0, size = 3) +
-    annotate("text", x = 0.5, y = 5.5, label = "VIF = 5 (moderado)",
-             color = "orange", hjust = 0, size = 3) +
-    coord_flip() +
-    labs(title = "Variance Inflation Factor (VIF) dos Preditores",
-         x = "Variável", y = "VIF") +
-    theme_minimal(base_size = 11) +
-    theme(plot.title = element_text(hjust = 0.5, face = "bold"))
-)
-dev.off()
-cat("  -> vif_barplot.png salvo\n")
-
-# =============================================================================
-# 10. MODELAGEM ESTATÍSTICA - REGRESSÃO LOGÍSTICA
-# =============================================================================
-cat("\n=================================================================\n")
-cat("10. MODELAGEM ESTATÍSTICA - REGRESSÃO LOGÍSTICA\n")
-cat("=================================================================\n\n")
-
-# ---- Função auxiliar para métricas de avaliação ----
-calc_metrics <- function(obs, pred_prob, threshold = 0.5, label = "") {
-  obs_num <- as.numeric(as.character(obs))
-  pred_labels <- ifelse(pred_prob >= threshold, 1, 0)
-
-  # Construir matriz de confusão completa
-  cm <- table(factor(obs_num, levels = c(0, 1)),
-              factor(pred_labels, levels = c(0, 1)))
-  dimnames(cm) <- list(Observado = c("0", "1"), Predito = c("0", "1"))
-
-  TP <- cm["1", "1"]
-  TN <- cm["0", "0"]
-  FP <- cm["0", "1"]
-  FN <- cm["1", "0"]
-
-  accuracy    <- (TP + TN) / (TP + TN + FP + FN)
-  sensitivity <- ifelse((TP + FN) > 0, TP / (TP + FN), 0)
-  specificity <- ifelse((TN + FP) > 0, TN / (TN + FP), 0)
-  precision   <- ifelse((TP + FP) > 0, TP / (TP + FP), 0)
-  recall      <- sensitivity
-  f1          <- ifelse((precision + recall) > 0,
-                        2 * precision * recall / (precision + recall), 0)
-  bal_acc     <- (sensitivity + specificity) / 2
-
-  # Matthews Correlation Coefficient
-  denom <- sqrt(as.numeric(TP+FP) * as.numeric(TP+FN) *
-                as.numeric(TN+FP) * as.numeric(TN+FN))
-  mcc <- ifelse(denom > 0, (TP*TN - FP*FN) / denom, 0)
-
-  cat(sprintf("\n  --- Métricas de Avaliação %s (threshold = %.3f) ---\n", label, threshold))
-  cat(sprintf("  Accuracy:          %.4f (%.2f%%)\n", accuracy, accuracy*100))
-  cat(sprintf("  Sensitivity:       %.4f\n", sensitivity))
-  cat(sprintf("  Specificity:       %.4f\n", specificity))
-  cat(sprintf("  Precision:         %.4f\n", precision))
-  cat(sprintf("  Recall:            %.4f\n", recall))
-  cat(sprintf("  F1-score:          %.4f\n", f1))
-  cat(sprintf("  Balanced Accuracy: %.4f\n", bal_acc))
-  cat(sprintf("  MCC:               %.4f\n", mcc))
-  cat("\n  Matriz de Confusão:\n")
-  print(cm)
-
-  return(list(accuracy = accuracy, sensitivity = sensitivity,
-              specificity = specificity, precision = precision,
-              recall = recall, f1 = f1, bal_acc = bal_acc, mcc = mcc,
-              cm = cm, threshold = threshold))
-}
-
-# --- 10.1 Regressão Logística (Class-level) com cost-sensitive weights ---
-cat("--- 10.1 Regressão Logística - Class-level ---\n")
+# --- 9.1 Regressão Logística (Class-level) ---
+cat("--- 9.1 Regressão Logística - Class-level ---\n")
 cat("  Variável resposta: Bug_class (0/1)\n")
-cat(sprintf("  Nota: Desbalanceamento severo (%d positivos / %d total = %.2f%%)\n",
-            sum(dc$Bug_class == 1), nrow(dc),
-            sum(dc$Bug_class == 1)/nrow(dc)*100))
-cat(sprintf("  Preditores (após remoção VIF > 10): %s\n\n",
-            paste(pred_class_reduced, collapse = ", ")))
+cat("  Nota: Desbalanceamento severo (99.9% sem bug)\n\n")
 
-# Cost-sensitive learning: pesos inversamente proporcionais à frequência
-n_total_c <- nrow(dc)
-n_pos_c <- sum(dc$Bug_class == 1)
-n_neg_c <- sum(dc$Bug_class == 0)
-w_pos_c <- n_total_c / (2 * n_pos_c)
-w_neg_c <- n_total_c / (2 * n_neg_c)
-weights_class <- ifelse(dc$Bug_class == 1, w_pos_c, w_neg_c)
-
-cat(sprintf("  Pesos: classe 0 = %.4f, classe 1 = %.4f\n", w_neg_c, w_pos_c))
+# Selecionar preditores
+pred_class <- c("WMC", "CBO", "RFC", "LOC", "LCOM5", "NL", "DIT", "CC")
+pred_class <- pred_class[pred_class %in% names(dc)]
 
 formula_class <- as.formula(paste("Bug_class ~",
-                                  paste(pred_class_reduced, collapse = " + ")))
+                                  paste(pred_class, collapse = " + ")))
 
-model_class <- glm(formula_class, data = dc, family = binomial(link = "logit"),
-                   weights = weights_class)
+model_class <- glm(formula_class, data = dc, family = binomial(link = "logit"))
 
-cat("\n  Sumário do modelo (com pesos):\n")
+cat("  Sumário do modelo:\n")
 print(summary(model_class))
 
 cat("\n  Coeficientes (odds ratio):\n")
 coefs <- coef(model_class)
 or <- exp(coefs)
+ci <- tryCatch(exp(confint(model_class)), error = function(e) NULL)
 p_vals <- summary(model_class)$coefficients[, "Pr(>|z|)"]
 
 cat(sprintf("  %-15s %12s %12s %12s\n",
@@ -926,63 +686,37 @@ for (i in seq_along(coefs)) {
 cat(sprintf("\n  AIC: %.2f\n", AIC(model_class)))
 
 # Pseudo R-squared (McFadden)
-null_model <- glm(Bug_class ~ 1, data = dc, family = binomial, weights = weights_class)
-mcfadden <- 1 - as.numeric(logLik(model_class) / logLik(null_model))
+null_model <- glm(Bug_class ~ 1, data = dc, family = binomial)
+mcfadden <- 1 - (logLik(model_class) / logLik(null_model))
 cat(sprintf("  Pseudo R² (McFadden): %.4f\n", mcfadden))
 
-# Predições e ROC
+# Predições
 prob_class <- predict(model_class, type = "response")
-obs_class_num <- as.numeric(as.character(dc$Bug_class))
+pred_labels <- ifelse(prob_class > 0.5, 1, 0)
+conf_matrix_class <- table(Observado = dc$Bug_class, Predito = pred_labels)
+cat("\n  Matriz de Confusão:\n")
+print(conf_matrix_class)
 
-roc_class <- roc(obs_class_num, prob_class, quiet = TRUE)
-auc_roc_class <- auc(roc_class)
-cat(sprintf("  AUC-ROC: %.4f\n", auc_roc_class))
+accuracy <- sum(diag(conf_matrix_class)) / sum(conf_matrix_class)
+cat(sprintf("\n  Acurácia: %.4f (%.2f%%)\n", accuracy, accuracy * 100))
 
-# Threshold ótimo (Youden Index: J = Sensitivity + Specificity - 1)
-best_coords <- coords(roc_class, "best", ret = c("threshold", "sensitivity", "specificity"),
-                       best.method = "youden")
-best_thresh_class <- best_coords$threshold[1]
-cat(sprintf("  Threshold ótimo (Youden): %.4f\n", best_thresh_class))
+# --- 9.2 Regressão Logística (File-level) ---
+cat("\n--- 9.2 Regressão Logística - File-level ---\n")
+cat("  Variável resposta: Bug_class (0/1)\n\n")
 
-# Métricas com threshold padrão 0.5
-cat("\n  >> Com threshold padrão (0.5):")
-metrics_class_05 <- calc_metrics(dc$Bug_class, prob_class, 0.5, "Class-level")
-
-# Métricas com threshold ótimo
-cat(sprintf("\n  >> Com threshold ótimo (%.4f):", best_thresh_class))
-metrics_class_opt <- calc_metrics(dc$Bug_class, prob_class, best_thresh_class, "Class-level")
-
-# Curva Precision-Recall
-pr_class <- pr.curve(scores.class0 = prob_class[obs_class_num == 1],
-                     scores.class1 = prob_class[obs_class_num == 0],
-                     curve = TRUE)
-auc_pr_class <- pr_class$auc.integral
-cat(sprintf("\n  AUC-PR: %.4f\n", auc_pr_class))
-
-# --- 10.2 Regressão Logística (File-level) com cost-sensitive weights ---
-cat("\n--- 10.2 Regressão Logística - File-level ---\n")
-cat("  Variável resposta: Bug_class (0/1)\n")
-cat(sprintf("  Nota: Desbalanceamento severo (%d positivos / %d total = %.2f%%)\n",
-            sum(df$Bug_class == 1), nrow(df),
-            sum(df$Bug_class == 1)/nrow(df)*100))
-cat(sprintf("  Preditores: %s\n\n", paste(pred_file_reduced, collapse = ", ")))
-
-n_total_f <- nrow(df)
-n_pos_f <- sum(df$Bug_class == 1)
-n_neg_f <- sum(df$Bug_class == 0)
-w_pos_f <- n_total_f / (2 * n_pos_f)
-w_neg_f <- n_total_f / (2 * n_neg_f)
-weights_file <- ifelse(df$Bug_class == 1, w_pos_f, w_neg_f)
-
-cat(sprintf("  Pesos: classe 0 = %.4f, classe 1 = %.4f\n", w_neg_f, w_pos_f))
+pred_file <- c("McCC", "LLOC",
+               "Number.of.previous.modifications",
+               "Number.of.previous.fixes",
+               "Number.of.committers",
+               "Number.of.developer.commits")
+pred_file <- pred_file[pred_file %in% names(df)]
 
 formula_file <- as.formula(paste("Bug_class ~",
-                                 paste(pred_file_reduced, collapse = " + ")))
+                                 paste(pred_file, collapse = " + ")))
 
-model_file <- glm(formula_file, data = df, family = binomial(link = "logit"),
-                  weights = weights_file)
+model_file <- glm(formula_file, data = df, family = binomial(link = "logit"))
 
-cat("\n  Sumário do modelo (com pesos):\n")
+cat("  Sumário do modelo:\n")
 print(summary(model_file))
 
 cat("\n  Coeficientes (odds ratio):\n")
@@ -1005,195 +739,30 @@ for (i in seq_along(coefs_f)) {
 
 cat(sprintf("\n  AIC: %.2f\n", AIC(model_file)))
 
-null_model_f <- glm(Bug_class ~ 1, data = df, family = binomial, weights = weights_file)
-mcfadden_f <- 1 - as.numeric(logLik(model_file) / logLik(null_model_f))
+null_model_f <- glm(Bug_class ~ 1, data = df, family = binomial)
+mcfadden_f <- 1 - (logLik(model_file) / logLik(null_model_f))
 cat(sprintf("  Pseudo R² (McFadden): %.4f\n", mcfadden_f))
 
-# Predições e ROC (File-level)
 prob_file_pred <- predict(model_file, type = "response")
-obs_file_num <- as.numeric(as.character(df$Bug_class))
+pred_labels_f <- ifelse(prob_file_pred > 0.5, 1, 0)
+conf_matrix_file <- table(Observado = df$Bug_class, Predito = pred_labels_f)
+cat("\n  Matriz de Confusão:\n")
+print(conf_matrix_file)
 
-roc_file <- roc(obs_file_num, prob_file_pred, quiet = TRUE)
-auc_roc_file <- auc(roc_file)
-cat(sprintf("  AUC-ROC: %.4f\n", auc_roc_file))
-
-best_coords_f <- coords(roc_file, "best", ret = c("threshold", "sensitivity", "specificity"),
-                          best.method = "youden")
-best_thresh_file <- best_coords_f$threshold[1]
-cat(sprintf("  Threshold ótimo (Youden): %.4f\n", best_thresh_file))
-
-cat("\n  >> Com threshold padrão (0.5):")
-metrics_file_05 <- calc_metrics(df$Bug_class, prob_file_pred, 0.5, "File-level")
-
-cat(sprintf("\n  >> Com threshold ótimo (%.4f):", best_thresh_file))
-metrics_file_opt <- calc_metrics(df$Bug_class, prob_file_pred, best_thresh_file, "File-level")
-
-pr_file <- pr.curve(scores.class0 = prob_file_pred[obs_file_num == 1],
-                    scores.class1 = prob_file_pred[obs_file_num == 0],
-                    curve = TRUE)
-auc_pr_file <- pr_file$auc.integral
-cat(sprintf("\n  AUC-PR: %.4f\n", auc_pr_file))
-
-# --- 10.3 Gráficos ROC ---
-cat("\n  Gerando curvas ROC...\n")
-
-png(file.path(dir_figuras, "curva_roc.png"),
-    width = 1200, height = 600, res = 150)
-par(mfrow = c(1, 2))
-
-plot(roc_class, main = "Curva ROC - Class-level",
-     col = "#2196F3", lwd = 2, print.auc = TRUE,
-     print.auc.x = 0.4, print.auc.y = 0.2)
-abline(a = 0, b = 1, lty = 2, col = "gray50")
-points(best_coords$specificity, best_coords$sensitivity,
-       pch = 19, col = "red", cex = 1.5)
-text(best_coords$specificity - 0.05, best_coords$sensitivity + 0.05,
-     sprintf("Youden\n(%.3f)", best_thresh_class), cex = 0.7, col = "red")
-
-plot(roc_file, main = "Curva ROC - File-level",
-     col = "#4CAF50", lwd = 2, print.auc = TRUE,
-     print.auc.x = 0.4, print.auc.y = 0.2)
-abline(a = 0, b = 1, lty = 2, col = "gray50")
-points(best_coords_f$specificity, best_coords_f$sensitivity,
-       pch = 19, col = "red", cex = 1.5)
-text(best_coords_f$specificity - 0.05, best_coords_f$sensitivity + 0.05,
-     sprintf("Youden\n(%.3f)", best_thresh_file), cex = 0.7, col = "red")
-
-par(mfrow = c(1, 1))
-dev.off()
-cat("  -> curva_roc.png salvo\n")
-
-# --- 10.4 Gráficos Precision-Recall ---
-cat("  Gerando curvas Precision-Recall...\n")
-
-png(file.path(dir_figuras, "curva_pr.png"),
-    width = 1200, height = 600, res = 150)
-par(mfrow = c(1, 2))
-
-plot(pr_class, main = sprintf("Curva PR - Class-level\n(AUC-PR = %.4f)", auc_pr_class),
-     color = "#2196F3", lwd = 2)
-
-plot(pr_file, main = sprintf("Curva PR - File-level\n(AUC-PR = %.4f)", auc_pr_file),
-     color = "#4CAF50", lwd = 2)
-
-par(mfrow = c(1, 1))
-dev.off()
-cat("  -> curva_pr.png salvo\n")
+accuracy_f <- sum(diag(conf_matrix_file)) / sum(conf_matrix_file)
+cat(sprintf("\n  Acurácia: %.4f (%.2f%%)\n", accuracy_f, accuracy_f * 100))
 
 # =============================================================================
-# 11. VALIDAÇÃO CRUZADA (LOOCV)
+# 10. GRÁFICOS ADICIONAIS
 # =============================================================================
 cat("\n=================================================================\n")
-cat("11. VALIDAÇÃO CRUZADA (Leave-One-Out Cross-Validation)\n")
+cat("10. GRÁFICOS ADICIONAIS\n")
 cat("=================================================================\n\n")
 
-# LOOCV é mais adequado dado o número extremamente pequeno de positivos (8 e 6).
-# Nota: Para viabilidade computacional, usamos LOOCV apenas no File-level (4261 obs)
-# e reportamos que o Class-level (7917 obs) teria resultado similar.
-
-# --- Class-level: usar 10-fold stratified CV como proxy ---
-cat("--- Class-level: 10-fold Stratified CV (proxy para LOOCV) ---\n")
-cat("  (LOOCV com 7917 iterações de GLM ponderado é computacionalmente inviável;\n")
-cat("   10-fold stratified CV é usado como aproximação)\n")
-
-set.seed(42)
-n_c <- nrow(dc)
-loocv_probs_c <- numeric(n_c)
-
-# Stratified 10-fold CV
-pos_idx <- which(dc$Bug_class == 1)
-neg_idx <- which(dc$Bug_class == 0)
-
-# Distribute positives across folds
-k <- 10
-fold_assignment <- integer(n_c)
-fold_assignment[pos_idx] <- rep(1:min(k, length(pos_idx)), length.out = length(pos_idx))
-fold_assignment[neg_idx] <- sample(rep(1:k, length.out = length(neg_idx)))
-
-for (fold in 1:k) {
-  test_idx <- which(fold_assignment == fold)
-  train_idx <- setdiff(1:n_c, test_idx)
-  train_data <- dc[train_idx, ]
-  test_data <- dc[test_idx, ]
-  w_train <- weights_class[train_idx]
-
-  model_cv <- tryCatch(
-    suppressWarnings(glm(formula_class, data = train_data,
-                         family = binomial, weights = w_train)),
-    error = function(e) NULL
-  )
-  if (!is.null(model_cv)) {
-    loocv_probs_c[test_idx] <- predict(model_cv, newdata = test_data, type = "response")
-  } else {
-    loocv_probs_c[test_idx] <- NA
-  }
-}
-
-# ROC do CV
-valid_c <- !is.na(loocv_probs_c)
-roc_loocv_c <- roc(obs_class_num[valid_c], loocv_probs_c[valid_c], quiet = TRUE)
-auc_loocv_c <- auc(roc_loocv_c)
-cat(sprintf("  AUC-ROC (LOOCV): %.4f\n", auc_loocv_c))
-
-best_loocv_c <- coords(roc_loocv_c, "best", best.method = "youden")
-thresh_loocv_c <- best_loocv_c$threshold[1]
-cat(sprintf("  >> Métricas LOOCV (threshold Youden = %.4f):", thresh_loocv_c))
-metrics_loocv_c <- calc_metrics(dc$Bug_class[valid_c], loocv_probs_c[valid_c],
-                                thresh_loocv_c, "LOOCV Class")
-
-cat("\n--- File-level: 10-fold Stratified CV ---\n")
-n_f <- nrow(df)
-loocv_probs_f <- numeric(n_f)
-
-# Stratified 10-fold CV for File-level
-pos_idx_f <- which(df$Bug_class == 1)
-neg_idx_f <- which(df$Bug_class == 0)
-
-fold_assignment_f <- integer(n_f)
-fold_assignment_f[pos_idx_f] <- rep(1:min(k, length(pos_idx_f)), length.out = length(pos_idx_f))
-fold_assignment_f[neg_idx_f] <- sample(rep(1:k, length.out = length(neg_idx_f)))
-
-for (fold in 1:k) {
-  test_idx <- which(fold_assignment_f == fold)
-  train_idx <- setdiff(1:n_f, test_idx)
-  train_data <- df[train_idx, ]
-  test_data <- df[test_idx, ]
-  w_train <- weights_file[train_idx]
-
-  model_cv <- tryCatch(
-    suppressWarnings(glm(formula_file, data = train_data,
-                         family = binomial, weights = w_train)),
-    error = function(e) NULL
-  )
-  if (!is.null(model_cv)) {
-    loocv_probs_f[test_idx] <- predict(model_cv, newdata = test_data, type = "response")
-  } else {
-    loocv_probs_f[test_idx] <- NA
-  }
-}
-
-valid_f <- !is.na(loocv_probs_f)
-roc_loocv_f <- roc(obs_file_num[valid_f], loocv_probs_f[valid_f], quiet = TRUE)
-auc_loocv_f <- auc(roc_loocv_f)
-cat(sprintf("  AUC-ROC (LOOCV): %.4f\n", auc_loocv_f))
-
-best_loocv_f <- coords(roc_loocv_f, "best", best.method = "youden")
-thresh_loocv_f <- best_loocv_f$threshold[1]
-cat(sprintf("  >> Métricas LOOCV (threshold Youden = %.4f):", thresh_loocv_f))
-metrics_loocv_f <- calc_metrics(df$Bug_class[valid_f], loocv_probs_f[valid_f],
-                                thresh_loocv_f, "LOOCV File")
-
-# =============================================================================
-# 12. GRÁFICOS ADICIONAIS
-# =============================================================================
-cat("\n=================================================================\n")
-cat("12. GRÁFICOS ADICIONAIS\n")
-cat("=================================================================\n\n")
-
-# --- 12.1 Densidade ---
+# --- 10.1 Densidade de WMC e LOC ---
 cat("  Gerando gráfico de densidade...\n")
 
-if (all(c("WMC", "LOC", "CBO", "RFC") %in% names(dc))) {
+if (all(c("WMC", "LOC") %in% names(dc))) {
   p1 <- ggplot(dc, aes(x = WMC)) +
     geom_density(fill = "#2196F3", alpha = 0.5) +
     labs(title = "Densidade: WMC", x = "WMC", y = "Densidade") +
@@ -1225,7 +794,7 @@ if (all(c("WMC", "LOC", "CBO", "RFC") %in% names(dc))) {
   cat("  -> densidade_metricas_class.png salvo\n")
 }
 
-# --- 12.2 Boxplot comparativo por Bug_class ---
+# --- 10.2 Boxplot comparativo por Bug_class ---
 cat("  Gerando boxplots comparativos por Bug_class...\n")
 
 comp_cols <- c("WMC", "CBO", "RFC", "LOC")
@@ -1234,8 +803,8 @@ comp_cols <- comp_cols[comp_cols %in% names(dc)]
 plots_comp <- list()
 for (i in seq_along(comp_cols)) {
   col <- comp_cols[i]
-  plots_comp[[i]] <- ggplot(dc, aes(x = Bug_class, y = .data[[col]],
-                                     fill = Bug_class)) +
+  plots_comp[[i]] <- ggplot(dc, aes_string(x = "Bug_class", y = col,
+                                            fill = "Bug_class")) +
     geom_boxplot(alpha = 0.7, outlier.size = 0.5) +
     scale_fill_manual(values = c("0" = "#2196F3", "1" = "#F44336")) +
     labs(title = paste(col, "por Bug_class"), x = "Bug Class", y = col) +

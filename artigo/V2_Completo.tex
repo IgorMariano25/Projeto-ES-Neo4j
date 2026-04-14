@@ -2,7 +2,7 @@
 
 \usepackage{sbc-template}
 \usepackage{graphicx,url}
-\usepackage[utf8]{inputenc}a
+\usepackage[utf8]{inputenc}
 \usepackage[brazil]{babel}
 \usepackage{booktabs}
 \usepackage{multirow}
@@ -13,10 +13,10 @@
 
 \title{Análise Estatística de Métricas de Código-Fonte\\do Framework Neo4j}
 
-\author{Igor Mariano\inst{1}, Felipe\inst{1}}
+\author{Igor Mariano Lopes Rodrigues\inst{1}, Filipe Oliveira de Saldanha da Gama\inst{1}}
 
-\address{Curso de Graduação -- Engenharia de Software\\
-  \email{\{igor.mariano, felipe\}@aluno.edu.br}
+\address{IBMEC -- Curso de Graduação em Engenharia de Software\\
+  \email{\{202407095992,202303161085\}@alunos.ibmec.edu.br}
 }
 
 \begin{document}
@@ -24,150 +24,91 @@
 \maketitle
 
 \begin{abstract}
-This paper presents a statistical analysis of source code metrics extracted from the Neo4j framework, a graph database system written in Java. Using the GitHub Bug Dataset (version 1.1), we analyze two granularity levels --- class and file --- encompassing 7{,}917 and 4{,}261 instances respectively. The study applies descriptive statistics, normality tests (Shapiro-Wilk and Kolmogorov-Smirnov), correlation analysis using Pearson coefficients, outlier detection via the IQR method, and logistic regression modeling. Results reveal strong correlations among size and complexity metrics (e.g., LOC$\times$LLOC: $r = 0.99$; WMC$\times$LOC: $r = 0.89$), highly right-skewed distributions for all metrics, and a severe class imbalance in the bug variable ($<0.15\%$ positive). The logistic regression models achieved high accuracy but failed to predict defective instances, highlighting the challenges of fault prediction with imbalanced data.
+This paper presents a statistical analysis of source code metrics from the Neo4j framework using the GitHub Bug Dataset v1.1, covering class-level (7{,}917 instances) and file-level (4{,}261 instances) granularities. Descriptive statistics, normality tests (Shapiro-Wilk and Lilliefors), Pearson and Spearman correlations, VIF analysis, and cost-sensitive logistic regression with cross-validation were applied. Strong correlations among size and complexity metrics were found (e.g., LOC$\times$LLOC: $r = 0.99$). A severe class imbalance ($<0.15\%$ positive) fundamentally limits predictive modeling---with only 8 and 6 bug instances, the Events Per Variable ratio is far below the recommended minimum of 10.
 \end{abstract}
 
 \begin{resumo}
-Este artigo apresenta uma análise estatística de métricas de código-fonte extraídas do framework Neo4j, um sistema de banco de dados em grafo escrito em Java. Utilizando o GitHub Bug Dataset (versão 1.1), analisamos dois níveis de granularidade --- classe e arquivo --- com 7.917 e 4.261 instâncias respectivamente. O estudo aplica estatística descritiva, testes de normalidade (Shapiro-Wilk e Kolmogorov-Smirnov), análise de correlação com coeficientes de Pearson, detecção de outliers pelo método IQR e modelagem por regressão logística. Os resultados revelam correlações fortes entre métricas de tamanho e complexidade (e.g., LOC$\times$LLOC: $r = 0{,}99$; WMC$\times$LOC: $r = 0{,}89$), distribuições fortemente assimétricas à direita para todas as métricas e um desbalanceamento severo na variável de bugs ($<0{,}15\%$ positivos). Os modelos de regressão logística alcançaram alta acurácia, porém falharam em prever instâncias defeituosas, evidenciando os desafios da predição de falhas em dados desbalanceados.
+Este artigo apresenta uma análise estatística de métricas de código-fonte do framework Neo4j, utilizando o GitHub Bug Dataset v1.1, nos níveis classe (7.917 instâncias) e arquivo (4.261 instâncias). Foram aplicados estatística descritiva, testes de normalidade (Shapiro-Wilk e Lilliefors), correlações de Pearson e Spearman, análise VIF e regressão logística \textit{cost-sensitive} com validação cruzada. Correlações fortes foram encontradas entre métricas de tamanho e complexidade (e.g., LOC$\times$LLOC: $r = 0{,}99$). O desbalanceamento severo ($<0{,}15\%$ positivos) limita fundamentalmente a modelagem preditiva---com apenas 8 e 6 instâncias com bug, a razão EPV está muito abaixo do mínimo de 10.
 \end{resumo}
 
 % =====================================================================
 \section{Introdução} \label{sec:intro}
 
-A análise quantitativa de métricas de código-fonte constitui uma abordagem fundamental na Engenharia de Software para compreender a qualidade, a complexidade e a propensão a defeitos de sistemas de software \cite{pressman2014}. Métricas orientadas a objetos, como as propostas por Chidamber e Kemerer \cite{chidamber1994}, permitem avaliar características estruturais de projetos Java e têm sido amplamente utilizadas em estudos empíricos de predição de falhas \cite{gyimothy2005, basili1996}.
+A análise quantitativa de métricas de código-fonte constitui abordagem fundamental na Engenharia de Software para compreender qualidade, complexidade e propensão a defeitos \cite{pressman2014}. Métricas orientadas a objetos, como as de Chidamber e Kemerer \cite{chidamber1994}, permitem avaliar características estruturais de projetos Java e são amplamente utilizadas em predição de falhas \cite{gyimothy2005, basili1996}.
 
-O framework Neo4j é um sistema de banco de dados em grafo de código aberto, amplamente utilizado em aplicações que demandam modelagem de relacionamentos complexos. Por sua relevância no ecossistema Java e pelo volume considerável de código-fonte, constitui um caso de estudo relevante para análise de métricas de software.
-
-Este trabalho tem como objetivo aplicar técnicas de estatística descritiva e inferencial sobre datasets de métricas de código-fonte do framework Neo4j, extraídos do GitHub Bug Dataset versão 1.1 \cite{toth2016}. A análise contempla: (i) medidas de tendência central e dispersão; (ii) construção de gráficos para visualização das distribuições; (iii) detecção de outliers; (iv) testes de normalidade; (v) análise de correlação entre métricas; e (vi) ajuste de um modelo de regressão logística para predição de defeitos.
-
-O repositório completo com os scripts, dados e figuras está disponível em: \url{https://github.com/igormariano/AP1-Projeto-ES-Neo4j}.
+Este trabalho aplica técnicas de estatística descritiva e inferencial sobre datasets de métricas do framework Neo4j, extraídos do GitHub Bug Dataset v1.1 \cite{toth2016}. A análise contempla: (i)~medidas de tendência central e dispersão; (ii)~gráficos e detecção de outliers; (iii)~testes de normalidade; (iv)~correlação (Pearson e Spearman) e multicolinearidade (VIF); e (v)~regressão logística \textit{cost-sensitive} validada por \textit{cross-validation}. O repositório está em: \url{https://github.com/igormariano/AP1-Projeto-ES-Neo4j}.
 
 % =====================================================================
 \section{Metodologia} \label{sec:metodo}
 
 \subsection{Fonte de Dados}
 
-Os datasets utilizados foram obtidos do GitHub Bug Dataset versão 1.1 \cite{toth2016}, que contém métricas de código-fonte extraídas de projetos Java hospedados no GitHub. Para o framework Neo4j, foram selecionados os datasets mais recentes disponíveis, organizados em dois níveis de granularidade:
-
-\begin{itemize}
-  \item \textbf{Dataset Class-level}: 7.917 instâncias com 113 atributos, incluindo métricas de complexidade, acoplamento, coesão, herança, tamanho, documentação e warnings de análise estática.
-  \item \textbf{Dataset File-level}: 4.261 instâncias com 12 atributos, incluindo complexidade ciclomática (McCC), linhas lógicas de código (LLOC) e métricas de histórico de modificações.
-\end{itemize}
-
-Nenhum dos datasets apresentou valores ausentes.
+Os datasets foram obtidos do GitHub Bug Dataset v1.1 \cite{toth2016}: \textbf{Class-level} com 7.917 instâncias e 113 atributos (complexidade, acoplamento, coesão, herança, tamanho, documentação, warnings) e \textbf{File-level} com 4.261 instâncias e 12 atributos (McCC, LLOC, histórico de modificações). Nenhum dataset apresentou valores ausentes.
 
 \subsection{Seleção de Variáveis}
 
-A partir dos 113 atributos originais do dataset Class-level, foram selecionadas 19 variáveis numéricas para análise, com base nos seguintes critérios: relevância estatística, semântica da métrica, alinhamento com os requisitos da análise e ausência de redundância excessiva.
-
-A Tabela~\ref{tab:selecao} apresenta as variáveis selecionadas e suas justificativas.
+Dos 113 atributos do Class-level, selecionaram-se 19 variáveis numéricas (Tabela~\ref{tab:selecao}) por relevância estatística e ausência de redundância. Excluíram-se identificadores textuais, metadados de localização, métricas totais redundantes (prefixo T), categorias individuais de regras PMD e variáveis com variância zero. No File-level, CLOC foi excluída por ser constante, mantendo-se 7 variáveis.
 
 \begin{table}[H]
 \centering
 \caption{Variáveis selecionadas para análise (Class-level)}
 \label{tab:selecao}
-\small
-\begin{tabular}{lll}
+\footnotesize
+\begin{tabular}{llp{5.5cm}}
 \toprule
 \textbf{Variável} & \textbf{Categoria} & \textbf{Descrição} \\
 \midrule
-WMC   & Complexidade & Complexidade ponderada dos métodos \\
-CBO   & Acoplamento  & Acoplamento entre classes \\
-RFC   & Acoplamento  & Resposta para a classe \\
-LCOM5 & Coesão       & Falta de coesão dos métodos \\
-DIT   & Herança      & Profundidade na árvore de herança \\
-NOC   & Herança      & Número de filhos \\
-LOC   & Tamanho      & Linhas de código \\
-LLOC  & Tamanho      & Linhas lógicas de código \\
-NOS   & Tamanho      & Número de statements \\
-NM    & Tamanho      & Número de métodos \\
-NL    & Complexidade & Nível de aninhamento \\
-NLE   & Complexidade & Nível de aninhamento else-if \\
-CC    & Clones       & Cobertura de clones \\
-CD    & Documentação & Densidade de comentários \\
-CLOC  & Documentação & Linhas de comentário \\
-NA    & Tamanho      & Número de atributos \\
-WarningInfo  & Qualidade & Warnings informativos \\
-WarningMajor & Qualidade & Warnings majoritários \\
-N. de bugs   & Alvo      & Número de defeitos \\
+WMC, NL, NLE & Complexidade & Complexidade ponderada, aninhamento \\
+CBO, RFC      & Acoplamento  & Acoplamento entre classes, resposta \\
+LCOM5         & Coesão       & Falta de coesão dos métodos \\
+DIT, NOC      & Herança      & Profundidade, número de filhos \\
+LOC, LLOC, NOS, NM, NA & Tamanho & Linhas, statements, métodos, atributos \\
+CC            & Clones       & Cobertura de clones \\
+CD, CLOC      & Documentação & Densidade e linhas de comentário \\
+WarningInfo, WarningMajor & Qualidade & Warnings informativos e majoritários \\
+N. de bugs    & Alvo         & Número de defeitos \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-As variáveis excluídas incluem: identificadores textuais (ID, Name, Path); metadados de localização (Line, Column); métricas totais redundantes com versões locais (prefixo T); métricas de clone granulares redundantes com CC; categorias individuais de regras PMD (cobertas pelos warnings agregados); e variáveis com variância zero (e.g., WarningBlocker = 0 em 100\% das instâncias).
-
-Para o dataset File-level, a coluna CLOC foi excluída por ser constante (todos os valores iguais a zero), mantendo-se 7 variáveis numéricas.
-
 \subsection{Ferramentas Utilizadas}
 
-A análise exploratória inicial foi conduzida em Python 3.12 com as bibliotecas \texttt{pandas} e \texttt{numpy}. A análise estatística definitiva, incluindo testes, gráficos e modelagem, foi realizada em R 4.5.2 \cite{rcoreteam2024}, utilizando os pacotes \texttt{ggplot2}, \texttt{corrplot}, \texttt{PerformanceAnalytics} e \texttt{car}.
+Exploração inicial em Python 3.12 (\texttt{pandas}, \texttt{numpy}). Análise definitiva em R~4.5.2 \cite{rcoreteam2024}: \texttt{ggplot2}, \texttt{corrplot}, \texttt{PerformanceAnalytics}, \texttt{car}, \texttt{nortest}, \texttt{pROC}, \texttt{PRROC} e \texttt{caret}.
 
 % =====================================================================
 \section{Resultados e Discussão} \label{sec:resultados}
 
-\subsection{Medidas de Tendência Central}
+\subsection{Estatísticas Descritivas}
 
-A Tabela~\ref{tab:tendencia_class} apresenta as medidas de tendência central para as principais variáveis do dataset Class-level.
+A Tabela~\ref{tab:descritivas} sintetiza as medidas de tendência central e dispersão para as principais variáveis do Class-level.
 
 \begin{table}[H]
 \centering
-\caption{Medidas de tendência central --- Class-level}
-\label{tab:tendencia_class}
-\small
-\begin{tabular}{lrrr}
+\caption{Estatísticas descritivas --- Class-level}
+\label{tab:descritivas}
+\footnotesize
+\begin{tabular}{lrrrrrr}
 \toprule
-\textbf{Variável} & \textbf{Média} & \textbf{Mediana} & \textbf{Moda} \\
+\textbf{Var.} & \textbf{Média} & \textbf{Mediana} & \textbf{Moda} & \textbf{Amp.} & \textbf{DP} & \textbf{CV} \\
 \midrule
-WMC   & 7,39   & 3,00   & 1 \\
-CBO   & 5,64   & 3,00   & 2 \\
-RFC   & 9,84   & 5,00   & 1 \\
-LCOM5 & 1,58   & 1,00   & 1 \\
-LOC   & 59,70  & 25,00  & 7 \\
-LLOC  & 49,18  & 21,00  & 8 \\
-NOS   & 18,77  & 5,00   & 1 \\
-NM    & 8,61   & 4,00   & 1 \\
-DIT   & 0,98   & 1,00   & 1 \\
-CC    & 0,12   & 0,00   & 0 \\
-CD    & 0,05   & 0,00   & 0 \\
+WMC   & 7,39   & 3    & 1 & 325   & 13,90  & 1,88 \\
+CBO   & 5,64   & 3    & 2 & 161   & 7,45   & 1,32 \\
+RFC   & 9,84   & 5    & 1 & 293   & 16,01  & 1,63 \\
+LOC   & 59,70  & 25   & 7 & 3.207 & 115,59 & 1,94 \\
+LLOC  & 49,18  & 21   & 8 & 2.588 & 92,05  & 1,87 \\
+NOS   & 18,77  & 5    & 1 & 1.411 & 47,10  & 2,51 \\
+NM    & 8,61   & 4    & 1 & 161   & 13,56  & 1,57 \\
+DIT   & 0,98   & 1    & 1 & 6     & 0,99   & 1,01 \\
+CC    & 0,12   & 0    & 0 & 1     & 0,29   & 2,42 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Em todas as métricas de tamanho e complexidade, a média é substancialmente superior à mediana, indicando distribuições fortemente assimétricas à direita. A métrica LOC, por exemplo, apresenta média de 59,70 e mediana de apenas 25,00, evidenciando que a maioria das classes possui poucas linhas de código, enquanto um subconjunto menor apresenta valores elevados. A moda igual a 1 para WMC, RFC, NOS e NM indica que a maioria das classes no projeto Neo4j possui complexidade mínima.
+Em todas as métricas, a média é substancialmente superior à mediana, indicando distribuições fortemente assimétricas à direita. LOC apresenta CV = 1,94, confirmando alta dispersão. A moda igual a 1 para WMC, RFC, NOS e NM indica que a maioria das classes possui complexidade mínima. DIT apresenta baixa variabilidade (amplitude~=~6, $\sigma = 0{,}99$), refletindo hierarquias rasas.
 
-Para o dataset File-level, observa-se padrão semelhante: McCC apresenta média de 6,06 e mediana de 2,00 (moda = 1), enquanto LLOC possui média de 102,74 e mediana de 55,00. A variável ``Number of developer commits'' apresenta moda de 5.350, correspondente ao desenvolvedor com maior número de contribuições.
+Para o File-level, McCC apresenta média de 6,06 e mediana de 2,00; LLOC tem média de 102,74 e mediana de 55,00. ``Number of developer commits'' apresenta variância de 4.106.050,59, decorrente da grande discrepância entre desenvolvedores.
 
-\subsection{Medidas de Dispersão}
-
-\begin{table}[H]
-\centering
-\caption{Medidas de dispersão --- Class-level}
-\label{tab:dispersao_class}
-\small
-\begin{tabular}{lrrr}
-\toprule
-\textbf{Variável} & \textbf{Amplitude} & \textbf{Variância} & \textbf{Desvio Padrão} \\
-\midrule
-WMC   & 325     & 193,25   & 13,90 \\
-CBO   & 161     & 55,57    & 7,45 \\
-RFC   & 293     & 256,19   & 16,01 \\
-LOC   & 3.207   & 13.360,81 & 115,59 \\
-LLOC  & 2.588   & 8.473,03  & 92,05 \\
-NOS   & 1.411   & 2.218,10  & 47,10 \\
-NM    & 161     & 183,94   & 13,56 \\
-DIT   & 6       & 0,99     & 0,99 \\
-CC    & 1       & 0,08     & 0,29 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-As métricas de tamanho apresentam as maiores amplitudes e variâncias. A variável LOC possui amplitude de 3.207 e desvio padrão de 115,59, o que é quase o dobro da média (59,70), confirmando a alta dispersão. O coeficiente de variação de LOC é de 1,94, indicando dispersão elevada. A métrica DIT, por outro lado, apresenta baixa variabilidade (amplitude = 6, $\sigma$ = 0,99), refletindo hierarquias de herança rasas no Neo4j.
-
-No dataset File-level, destaca-se ``Number of developer commits'' com variância de 4.106.050,59 e desvio padrão de 2.026,34, decorrente da grande discrepância entre desenvolvedores.
-
-\subsection{Medidas de Posição Relativa e Boxplots}
-
-A análise de quartis e percentis reforça a assimetria observada. Para WMC no Class-level: $Q_1 = 1$, $Q_2 = 3$, $Q_3 = 8$, $P_{95} = 27$, com IQR = 7. Isso indica que 75\% das classes possuem WMC $\leq$ 8, enquanto o valor máximo é 325.
+\subsection{Boxplots e Outliers}
 
 \begin{figure}[H]
 \centering
@@ -176,16 +117,29 @@ A análise de quartis e percentis reforça a assimetria observada. Para WMC no C
 \label{fig:boxplots_class}
 \end{figure}
 
-A Figura~\ref{fig:boxplots_class} evidencia a presença massiva de outliers em todas as métricas, um padrão comum em projetos de software de grande porte. A Figura~\ref{fig:boxplots_file} apresenta os boxplots para o dataset File-level, onde padrão semelhante é observado.
+A Figura~\ref{fig:boxplots_class} evidencia a presença massiva de outliers em todas as métricas. A Tabela~\ref{tab:outliers} resume a detecção pelo método IQR. A proporção varia entre 5,86\% (NA) e 22,48\% (CC). Para métricas de tamanho (LOC, LLOC, NOS), $\approx$10\% são outliers, consistente com a regra de Pareto \cite{nagappan2006}. Os outliers não foram removidos por representarem classes legitimamente complexas. O File-level apresenta padrão análogo (McCC: 10,91\%; LLOC: 7,89\% de outliers).
 
-\begin{figure}[H]
+\begin{table}[H]
 \centering
-\includegraphics[width=0.85\textwidth]{../figuras/boxplots_file.png}
-\caption{Boxplots das principais métricas --- File-level}
-\label{fig:boxplots_file}
-\end{figure}
+\caption{Outliers pelo método IQR --- Class-level (seleção)}
+\label{tab:outliers}
+\footnotesize
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Variável} & \textbf{Outliers} & \textbf{\%} & \textbf{Limite Sup.} \\
+\midrule
+WMC  & 706   & 8,92  & 18,50 \\
+CBO  & 644   & 8,13  & 14,50 \\
+RFC  & 759   & 9,59  & 24,50 \\
+LOC  & 799   & 10,09 & 140,00 \\
+NOS  & 840   & 10,61 & 42,00 \\
+NM   & 866   & 10,94 & 19,50 \\
+CC   & 1.780 & 22,48 & 0,00 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\subsection{Visualizações Gráficas}
+\subsection{Histogramas e Distribuições}
 
 \begin{figure}[H]
 \centering
@@ -194,114 +148,43 @@ A Figura~\ref{fig:boxplots_class} evidencia a presença massiva de outliers em t
 \label{fig:hist_class}
 \end{figure}
 
-Os histogramas (Figura~\ref{fig:hist_class}) confirmam que todas as variáveis seguem distribuições fortemente assimétricas à direita, com concentração massiva de valores baixos e caudas longas à direita. Esse comportamento é esperado em métricas de software, onde a maioria dos componentes é simples e poucos concentram alta complexidade \cite{radjenovic2013}.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.85\textwidth]{../figuras/densidade_metricas_class.png}
-\caption{Gráficos de densidade para WMC, LOC, CBO e RFC}
-\label{fig:densidade}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.70\textwidth]{../figuras/dispersao_loc_wmc.png}
-\caption{Dispersão: LOC vs WMC (Class-level)}
-\label{fig:disp_loc_wmc}
-\end{figure}
-
-A Figura~\ref{fig:disp_loc_wmc} mostra a relação entre LOC e WMC, evidenciando uma correlação forte e positiva. As instâncias com bugs (em vermelho) tendem a se posicionar em regiões de valores elevados, embora o número limitado de observações com defeitos (apenas 8) não permita conclusões robustas.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.65\textwidth]{../figuras/barras_distribuicao_bugs.png}
-\caption{Distribuição de classes de bug nos dois datasets}
-\label{fig:barras_bugs}
-\end{figure}
-
-A Figura~\ref{fig:barras_bugs} ilustra o severo desbalanceamento da variável alvo: apenas 8 classes (0,10\%) e 6 arquivos (0,14\%) apresentam bugs registrados.
-
-\subsection{Avaliação de Outliers}
-
-A Tabela~\ref{tab:outliers} resume a detecção de outliers pelo método IQR ($Q_3 + 1{,}5 \times IQR$).
-
-\begin{table}[H]
-\centering
-\caption{Detecção de outliers pelo método IQR --- Class-level}
-\label{tab:outliers}
-\small
-\begin{tabular}{lrrr}
-\toprule
-\textbf{Variável} & \textbf{Outliers} & \textbf{\% Total} & \textbf{Limite Sup.} \\
-\midrule
-WMC   & 706  & 8,92\%  & 18,50 \\
-CBO   & 644  & 8,13\%  & 14,50 \\
-RFC   & 759  & 9,59\%  & 24,50 \\
-LOC   & 799  & 10,09\% & 140,00 \\
-LLOC  & 787  & 9,94\%  & 112,50 \\
-NOS   & 840  & 10,61\% & 42,00 \\
-NM    & 866  & 10,94\% & 19,50 \\
-CC    & 1.780 & 22,48\% & 0,00 \\
-CLOC  & 1.155 & 14,59\% & 7,50 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-A proporção de outliers varia entre 5,86\% (NA) e 22,48\% (CC). A métrica CC (clone coverage) apresenta o maior número de outliers, pois a maioria dos valores é zero e qualquer valor positivo é classificado como outlier pelo método IQR. Para as métricas de tamanho (LOC, LLOC, NOS), aproximadamente 10\% das instâncias são outliers, o que é consistente com a regra de Pareto aplicada a software: uma minoria de componentes concentra a maior complexidade \cite{nagappan2006}.
-
-Os outliers observados não foram removidos, pois representam classes legitimamente complexas do framework Neo4j, e removê-los distorceria a análise.
+Os histogramas (Figura~\ref{fig:hist_class}) confirmam distribuições fortemente assimétricas à direita, com concentração massiva em valores baixos e caudas longas, comportamento esperado em métricas de software \cite{radjenovic2013}. A distribuição de bugs é extremamente desbalanceada: apenas 8 classes (0,10\%) e 6 arquivos (0,14\%) apresentam bugs registrados.
 
 \subsection{Testes de Normalidade}
 
-Para todas as variáveis de ambos os datasets, os testes de Shapiro-Wilk e Kolmogorov-Smirnov rejeitaram a hipótese nula de normalidade ($p < 10^{-50}$ em todos os casos). A Tabela~\ref{tab:normalidade} apresenta as estatísticas de teste para as principais variáveis.
+Para todas as variáveis, os testes de Shapiro-Wilk \cite{shapiro1965} e Lilliefors \cite{lilliefors1967} rejeitaram a hipótese nula de normalidade ($p < 10^{-50}$). A Tabela~\ref{tab:normalidade} apresenta estatísticas para variáveis representativas. Adotou-se Lilliefors em lugar do teste K-S com parâmetros estimados, que é anticonservativo \cite{lilliefors1967}. Para Shapiro-Wilk (limite de 5.000 obs.), utilizou-se amostra com seed=42.
 
 \begin{table}[H]
 \centering
-\caption{Testes de normalidade --- Class-level (amostra de 5.000)}
+\caption{Testes de normalidade --- Class-level}
 \label{tab:normalidade}
-\small
+\footnotesize
 \begin{tabular}{lcccc}
 \toprule
-\textbf{Variável} & \textbf{SW Stat} & \textbf{SW $p$} & \textbf{KS Stat} & \textbf{KS $p$} \\
+\textbf{Var.} & \textbf{SW} & \textbf{SW $p$} & \textbf{Lill. $D$} & \textbf{Lill. $p$} \\
 \midrule
-WMC   & 0,4214 & $< 10^{-83}$ & 0,3081 & $< 10^{-300}$ \\
-CBO   & 0,5874 & $< 10^{-76}$ & 0,2246 & $< 10^{-300}$ \\
-RFC   & 0,5158 & $< 10^{-79}$ & 0,2786 & $< 10^{-300}$ \\
-LOC   & 0,4244 & $< 10^{-83}$ & 0,3113 & $< 10^{-300}$ \\
-DIT   & 0,8267 & $< 10^{-59}$ & 0,2520 & $< 10^{-300}$ \\
-CC    & 0,4754 & $< 10^{-81}$ & 0,4410 & $< 10^{-300}$ \\
+WMC & 0,421 & $< 10^{-83}$ & 0,308 & $< 2{,}2\!\times\!10^{-16}$ \\
+CBO & 0,587 & $< 10^{-76}$ & 0,225 & $< 2{,}2\!\times\!10^{-16}$ \\
+LOC & 0,424 & $< 10^{-83}$ & 0,311 & $< 2{,}2\!\times\!10^{-16}$ \\
+DIT & 0,827 & $< 10^{-59}$ & 0,252 & $< 2{,}2\!\times\!10^{-16}$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-A estatística de Shapiro-Wilk \cite{shapiro1965} varia entre 0,013 (Number of bugs) e 0,827 (DIT), sempre muito distante de 1 (normalidade perfeita). Esses resultados são esperados para métricas de software, que tipicamente seguem distribuições lognormais ou de Pareto \cite{radjenovic2013}. A rejeição da normalidade justifica o uso de métodos não paramétricos ou transformações em análises subsequentes.
+A rejeição universal de normalidade justifica o uso de Spearman e implica cautela com métodos que assumem normalidade.
 
 \subsection{Análise de Correlação}
+
+Dado que todas as variáveis violam normalidade, complementou-se Pearson com Spearman (baseada em postos), mais robusta a outliers.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.80\textwidth]{../figuras/correlacao_heatmap_class.png}
-\caption{Heatmap de correlação --- Class-level}
+\caption{Heatmap de correlação de Pearson --- Class-level}
 \label{fig:corr_class}
 \end{figure}
 
-A Figura~\ref{fig:corr_class} apresenta a matriz de correlação de Pearson para as principais métricas do Class-level. As correlações mais relevantes são:
-
-\textbf{Correlações fortes} ($|r| \geq 0{,}7$):
-\begin{itemize}
-  \item LOC $\times$ LLOC: $r = 0{,}99$ --- redundância quase total entre as duas métricas de tamanho;
-  \item LOC $\times$ NOS: $r = 0{,}95$ --- tamanho total fortemente associado ao número de statements;
-  \item WMC $\times$ LOC: $r = 0{,}89$ --- complexidade cresce com o tamanho;
-  \item WMC $\times$ RFC: $r = 0{,}82$ --- classes complexas tendem a interagir com mais métodos;
-  \item CBO $\times$ RFC: $r = 0{,}80$ --- acoplamento e resposta da classe são intimamente relacionados.
-\end{itemize}
-
-\textbf{Correlações moderadas} ($0{,}4 \leq |r| < 0{,}7$):
-\begin{itemize}
-  \item WMC $\times$ CBO: $r = 0{,}51$;
-  \item WMC $\times$ NM: $r = 0{,}53$;
-  \item CBO $\times$ LOC: $r = 0{,}59$.
-\end{itemize}
+\textbf{Correlações fortes} ($|r| \geq 0{,}7$, Pearson): LOC$\times$LLOC: $r = 0{,}99$; LOC$\times$NOS: $r = 0{,}95$; WMC$\times$LOC: $r = 0{,}89$; WMC$\times$RFC: $r = 0{,}82$; CBO$\times$RFC: $r = 0{,}80$. \textbf{Moderadas} ($0{,}4 \leq |r| < 0{,}7$): WMC$\times$CBO: $r = 0{,}51$; CBO$\times$LOC: $r = 0{,}59$. As correlações de Spearman apresentam padrão semelhante com magnitudes geralmente mais elevadas (e.g., LOC$\times$LLOC: $\rho = 0{,}99$; NOS$\times$NL: $\rho = 0{,}72$). A convergência reforça a robustez dos achados.
 
 \begin{figure}[H]
 \centering
@@ -310,112 +193,78 @@ A Figura~\ref{fig:corr_class} apresenta a matriz de correlação de Pearson para
 \label{fig:chart_corr}
 \end{figure}
 
-A Figura~\ref{fig:chart_corr}, gerada com o pacote PerformanceAnalytics, combina histogramas (diagonal), gráficos de dispersão (triângulo inferior) e coeficientes de correlação (triângulo superior), proporcionando uma visão integrada das relações entre variáveis.
+A Figura~\ref{fig:chart_corr} combina histogramas, dispersão e coeficientes de correlação. No File-level, as correlações mais fortes são McCC$\times$LLOC ($r = 0{,}72$) e ``N. previous modifications''$\times$``N. committers'' ($r = 0{,}77$; Spearman: $\rho = 0{,}90$).
 
-Para o dataset File-level, a correlação mais forte é McCC $\times$ LLOC ($r = 0{,}72$), confirmando que a complexidade ciclomática cresce com o tamanho do código. A correlação entre ``Number of previous modifications'' e ``Number of committers'' também é forte ($r = 0{,}77$), indicando que arquivos modificados por mais desenvolvedores acumulam mais modificações.
+\subsection{Análise de Multicolinearidade (VIF)}
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.80\textwidth]{../figuras/correlacao_heatmap_file.png}
-\caption{Heatmap de correlação --- File-level}
-\label{fig:corr_file}
-\end{figure}
+Calculou-se o VIF para quantificar multicolinearidade \cite{montgomery2012}. No Class-level, RFC (VIF = 20,18), WMC (15,17) e LOC (10,98) excederam o limiar de 10. Após remoção iterativa de RFC, os VIF finais ficaram abaixo de 10 (WMC: 8,75; LOC: 9,16). No File-level, todos os VIF foram aceitáveis ($\leq$ 5,58).
 
-\subsection{Modelagem Estatística --- Regressão Logística}
+\subsection{Regressão Logística}
 
-Para a modelagem, optou-se pela regressão logística binária, dada a natureza binária da variável alvo (Bug\_class: 0 ou 1), derivada de ``Number of bugs''.
+Optou-se por regressão logística binária com pesos \textit{cost-sensitive} inversamente proporcionais à frequência de cada classe, evitando classificação trivial como classe majoritária.
 
 \subsubsection{Modelo Class-level}
 
-O modelo ajustado utiliza como preditores: WMC, CBO, RFC, LOC, LCOM5, NL, DIT e CC. A Tabela~\ref{tab:logit_class} apresenta os coeficientes.
-
-\begin{table}[H]
-\centering
-\caption{Regressão logística --- Class-level}
-\label{tab:logit_class}
-\small
-\begin{tabular}{lrrr}
-\toprule
-\textbf{Variável} & \textbf{Odds Ratio} & \textbf{$p$-valor} & \textbf{Sig.} \\
-\midrule
-(Intercept) & 0,0019 & $3{,}77 \times 10^{-19}$ & *** \\
-WMC  & 0,9920 & 0,8130 & \\
-CBO  & 1,0208 & 0,4335 & \\
-RFC  & 1,0270 & 0,2951 & \\
-LOC  & 1,0005 & 0,8747 & \\
-LCOM5 & 0,6512 & 0,3891 & \\
-NL   & 1,0325 & 0,8889 & \\
-DIT  & 0,5571 & 0,2098 & \\
-CC   & $\approx 0$ & 0,3587 & \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Nenhum preditor individualmente alcançou significância estatística ($p < 0{,}05$). O modelo apresentou:
-\begin{itemize}
-  \item AIC = 129,26
-  \item Pseudo $R^2$ (McFadden) = 0,1194
-  \item Acurácia = 99,90\%
-\end{itemize}
-
-A alta acurácia é enganosa: o modelo classificou todas as instâncias como ``sem bug'', o que já fornece 99,90\% de acurácia devido ao desbalanceamento extremo. A matriz de confusão confirma que nenhuma das 8 instâncias com bug foi corretamente identificada.
+O modelo utilizou preditores remanescentes após remoção de VIF $>$ 10 (WMC, CBO, LOC, LCOM5, NL, DIT, CC). Os coeficientes apresentaram magnitude extrema (ordem $10^{12}$--$10^{15}$), indicando que o algoritmo \textit{não convergiu} --- separação completa dos dados, sintoma do desbalanceamento extremo (8 positivos em 7.917, EPV~$\approx$~1). O Pseudo $R^2$ (McFadden) foi $-10{,}76$ (modelo pior que o nulo). Na escala de McFadden, 0,2--0,4 indica ajuste excelente \cite{mcfadden1974}.
 
 \subsubsection{Modelo File-level}
 
-Para o File-level, os preditores foram: McCC, LLOC, Number of previous modifications, Number of previous fixes, Number of committers e Number of developer commits.
+Os preditores foram McCC, LLOC, N.~previous modifications, N.~previous fixes, N.~committers e N.~developer commits. O Pseudo $R^2$ (McFadden) foi 0,59 (excelente), porém o algoritmo também não convergiu. Apenas LLOC não foi significativo ($p = 0{,}30$); os demais resultados devem ser interpretados com cautela dado o número ínfimo de positivos (6 instâncias).
+
+\subsubsection{Métricas de Avaliação e Validação Cruzada}
 
 \begin{table}[H]
 \centering
-\caption{Regressão logística --- File-level}
-\label{tab:logit_file}
-\small
-\begin{tabular}{lrrr}
+\caption{Métricas de avaliação: regressão e validação cruzada (10-fold)}
+\label{tab:metricas_avaliacao}
+\footnotesize
+\begin{tabular}{lrrrr}
 \toprule
-\textbf{Variável} & \textbf{Odds Ratio} & \textbf{$p$-valor} & \textbf{Sig.} \\
+ & \multicolumn{2}{c}{\textbf{Treino completo}} & \multicolumn{2}{c}{\textbf{10-fold CV}} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5}
+\textbf{Métrica} & \textbf{Class} & \textbf{File} & \textbf{Class} & \textbf{File} \\
 \midrule
-(Intercept) & 0,0009 & $2{,}14 \times 10^{-12}$ & *** \\
-McCC  & 0,9961 & 0,8844 & \\
-LLOC  & 1,0007 & 0,7612 & \\
-N. previous mods & 1,0111 & 0,1695 & \\
-N. previous fixes & 1,0574 & 0,9481 & \\
-N. committers & 1,1120 & 0,3389 & \\
-N. dev commits & 0,9993 & 0,1560 & \\
+AUC-ROC   & 0,674 & 0,968 & 0,660 & 0,805 \\
+AUC-PR    & 0,007 & 0,020 & ---   & ---   \\
+Sensitivity & 0,375 & 1,000 & 0,625 & 0,833 \\
+Precision   & 0,014 & 0,024 & 0,002 & 0,007 \\
+F1-score    & 0,027 & 0,047 & 0,004 & 0,014 \\
+Bal.~Acc.   & 0,674 & 0,972 & 0,664 & 0,836 \\
+MCC         & 0,069 & 0,151 & 0,023 & 0,068 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-O modelo File-level apresentou comportamento análogo: AIC = 90,13, Pseudo $R^2$ = 0,1614 e acurácia de 99,86\%, mas sem capacidade de identificar os 6 arquivos com bugs. A variável ``Number of previous modifications'' apresentou o menor $p$-valor (0,1695), sugerindo uma tendência (não significativa) de associação com defeitos.
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{../figuras/curva_roc.png}
+\caption{Curvas ROC com Youden Index para Class e File-level}
+\label{fig:roc}
+\end{figure}
 
-\subsection{Discussão Geral}
+A Tabela~\ref{tab:metricas_avaliacao} consolida as métricas do treino completo e da validação cruzada estratificada com 10 folds. A degradação na CV confirma overfitting, especialmente no File-level (AUC: 0,97 $\to$ 0,81). Os valores de MCC próximos de zero (0,023 e 0,068) indicam poder preditivo praticamente nulo. A ``acurácia'' de 97--99\% é enganosa: um classificador trivial que sempre prediz ``sem bug'' obtém desempenho similar. As curvas Precision-Recall (não apresentadas por limitação de espaço) confirmam AUC-PR $\approx$ 0, reforçando a inadequação dos dados para predição.
 
-\textbf{Padrões encontrados:} As métricas de código-fonte do Neo4j seguem distribuições fortemente assimétricas, com a maioria das classes apresentando baixa complexidade e poucas concentrando valores extremos. Esse padrão é consistente com a literatura sobre métricas de software \cite{radjenovic2013, gyimothy2005}.
+\subsection{Discussão}
 
-\textbf{Relações entre métricas:} As correlações fortes entre LOC, LLOC, NOS, WMC e RFC indicam que essas métricas capturam dimensões sobrepostas do tamanho e complexidade do código. Em contextos de predição, essa multicolinearidade sugere que um subconjunto reduzido de métricas pode ser suficiente.
+As métricas do Neo4j seguem distribuições fortemente assimétricas, consistente com a literatura \cite{radjenovic2013, gyimothy2005}. As correlações fortes entre LOC, LLOC, NOS, WMC e RFC indicam dimensões sobrepostas de tamanho e complexidade, confirmadas pela análise VIF. A correlação extremamente fraca entre métricas e bugs (máximo $r = 0{,}06$) contrasta com estudos anteriores \cite{basili1996, gyimothy2005}, explicável pelo desbalanceamento extremo e possível subreporte de defeitos.
 
-\textbf{Métricas e defeitos:} A correlação extremamente fraca entre todas as métricas e a variável de bugs (máximo $r = 0{,}06$ para CBO) contrasta com achados de estudos anteriores \cite{basili1996, gyimothy2005}. Essa discrepância pode ser explicada pelo desbalanceamento extremo (apenas 8 e 6 instâncias com bugs nos datasets Class e File, respectivamente) e pela possibilidade de subreporte de defeitos no dataset.
+Quanto às métricas CK: DIT e NOC possuem variância quase zero no Neo4j (design ``flat''), tornando-as pouco discriminativas. LCOM5 possui múltiplas definições na literatura, dificultando comparações entre estudos.
 
-\textbf{Limitações da análise:}
-\begin{itemize}
-  \item O desbalanceamento severo ($<0{,}15\%$ de instâncias positivas) compromete a modelagem estatística e impede conclusões sobre a associação entre métricas e defeitos;
-  \item A coluna CLOC no dataset File-level contém apenas zeros, sugerindo falha na extração dessa métrica;
-  \item O teste de Kolmogorov-Smirnov reportou \textit{ties} nos dados, indicando que a versão utilizada assume distribuições contínuas;
-  \item A regressão logística sem tratamento de desbalanceamento (e.g., SMOTE, pesos) tende a classificar tudo como a classe majoritária.
-\end{itemize}
+% =====================================================================
+\subsection{Ameaças à Validade} \label{sec:ameacas}
+
+\textbf{Interna:} (i) Desbalanceamento extremo da variável alvo (8 e 6 positivos; EPV $\approx$ 1, muito abaixo do mínimo de 10 \cite{hosmer2013}); (ii) Teste K-S original com parâmetros estimados foi anticonservativo --- corrigido com Lilliefors; (iii) Multicolinearidade severa (LOC$\times$LLOC: $r = 0{,}99$) --- corrigida via VIF; (iv) Modelo avaliado no conjunto de treino --- corrigido com 10-fold CV.
+
+\textbf{Externa:} Resultados específicos ao Neo4j; dataset de versão única; possível viés de seleção do GitHub Bug Dataset.
+
+\textbf{Construto:} Métricas CK são proxies imperfeitos de qualidade; ``Number of bugs'' depende da completude do rastreamento; DIT e NOC com variância quase zero são irrelevantes neste contexto.
 
 % =====================================================================
 \section{Conclusão} \label{sec:conclusao}
 
-Este trabalho apresentou uma análise estatística completa de métricas de código-fonte do framework Neo4j, utilizando os datasets Class-level e File-level do GitHub Bug Dataset v1.1. A análise revelou que:
+Apresentou-se uma análise estatística de métricas do Neo4j (GitHub Bug Dataset v1.1) com testes de normalidade corrigidos (Lilliefors), correlação de Pearson e Spearman, análise VIF, regressão \textit{cost-sensitive} e validação cruzada. Todas as métricas seguem distribuições assimétricas com correlações fortes entre tamanho e complexidade (LOC$\times$LLOC: $r = 0{,}99$). O principal achado é a \textbf{inadequação do dataset para predição de defeitos}: com EPV~$\approx$~1, os modelos são não confiáveis e a ``alta acurácia'' é enganosa.
 
-\begin{enumerate}
-  \item Todas as métricas de código-fonte seguem distribuições fortemente assimétricas à direita, com alta concentração de valores baixos e caudas longas, refletindo a estrutura típica de projetos de software orientado a objetos de grande porte.
-  \item Existem correlações fortes entre métricas de tamanho e complexidade (LOC $\times$ LLOC: $r = 0{,}99$; WMC $\times$ LOC: $r = 0{,}89$), indicando redundância e sugerindo que um subconjunto reduzido de métricas pode ser representativo.
-  \item Nenhuma variável segue distribuição normal, rejeitando-se a hipótese de normalidade com $p$-valores extremamente baixos em todos os testes de Shapiro-Wilk e Kolmogorov-Smirnov.
-  \item A proporção de outliers pelo método IQR varia entre 5\% e 22\%, sendo os outliers representativos de componentes legitimamente complexos do framework.
-  \item Os modelos de regressão logística não conseguiram prever instâncias com defeitos devido ao desbalanceamento extremo da variável alvo, limitação inerente ao dataset utilizado.
-\end{enumerate}
-
-Como trabalhos futuros, sugere-se a aplicação de técnicas de balanceamento de classes (SMOTE, \textit{undersampling}), a utilização de modelos não paramétricos (e.g., \textit{Random Forest}) e a análise de versões anteriores do framework para obter maior representatividade de defeitos.
+Como trabalhos futuros: (i) combinar múltiplas versões do Neo4j para aumentar instâncias positivas; (ii) aplicar \textit{Random Forest} ou \textit{gradient boosting}; (iii) explorar \textit{cross-project defect prediction}.
 
 % =====================================================================
 \bibliographystyle{plain}
