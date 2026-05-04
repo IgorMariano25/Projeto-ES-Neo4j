@@ -32,10 +32,12 @@ Pearson and Spearman correlations, VIF multicollinearity analysis, cost-sensitiv
 logistic regression, and 10-fold cross-validation were applied. Strong correlations
 among size and complexity metrics were found (e.g., LOC$\times$LLOC: $r = 0.99$).
 All distributions are non-normal, and a severe class imbalance ($<0.15\%$ positive)
-fundamentally limits predictive modeling---with only 8 and 6 bug instances, the
-Events Per Variable ratio is far below the recommended minimum of 10, rendering
-any classifier unreliable. The main finding is dataset inadequacy for fault
+fundamentally limits predictive modeling---with only 8 buggy classes and 6 buggy
+files, the Events Per Variable ratio is far below the recommended minimum of 10,
+rendering any classifier unreliable. The main finding is dataset inadequacy for fault
 prediction, not the inadequacy of the metrics themselves.
+
+\noindent\textbf{Keywords:} Software metrics; Object-oriented design; Statistical analysis; Fault prediction; Class imbalance; Neo4j.
 \end{abstract}
 
 \begin{resumo}
@@ -48,8 +50,12 @@ Lilliefors), correlações de Pearson e Spearman, análise VIF, regressão logí
 fortes foram encontradas entre métricas de tamanho e complexidade (LOC$\times$LLOC:
 $r = 0{,}99$). Todas as distribuições são não-normais e o desbalanceamento severo
 ($<0{,}15\%$ positivos) limita fundamentalmente a modelagem preditiva---com apenas
-8 e 6 instâncias com bug, a razão EPV está muito abaixo do mínimo recomendado de
-10, tornando qualquer classificador não confiável.
+8 classes com bug e 6 arquivos com bug, a razão EPV está muito abaixo do mínimo
+recomendado de 10, tornando qualquer classificador não confiável. O principal
+achado é a inadequação do dataset para predição de defeitos, e não a inadequação
+das métricas em si.
+
+\noindent\textbf{Palavras-chave:} Métricas de software; Projeto orientado a objetos; Análise estatística; Predição de defeitos; Desbalanceamento de classes; Neo4j.
 \end{resumo}
 
 % =====================================================================
@@ -66,30 +72,32 @@ Este trabalho aplica técnicas de estatística descritiva e inferencial sobre da
 
 \subsection{Fonte de Dados}
 
-Os datasets foram obtidos do GitHub Bug Dataset v1.1 \cite{toth2016}. Para o Neo4j, selecionaram-se os datasets mais recentes: \textbf{Class-level} com 7.917 instâncias e 113 atributos (complexidade, acoplamento, coesão, herança, tamanho, documentação, warnings) e \textbf{File-level} com 4.261 instâncias e 12 atributos (complexidade ciclomática McCC, LLOC e histórico de modificações). Nenhum dataset apresentou valores ausentes.
+Os datasets foram obtidos do GitHub Bug Dataset v1.1 \cite{toth2016}. Para o Neo4j, foram selecionados os datasets mais recentes: \textbf{Class-level} com 7.917 instâncias e 113 atributos (complexidade, acoplamento, coesão, herança, tamanho, documentação, warnings) e \textbf{File-level} com 4.261 instâncias e 12 atributos (complexidade ciclomática McCC, LLOC e histórico de modificações). Nenhum dataset apresentou valores ausentes.
 
 \subsection{Seleção de Variáveis}
 
-Dos 113 atributos Class-level, selecionaram-se 19 variáveis numéricas (Tabela~\ref{tab:selecao}). Excluíram-se: identificadores textuais, metadados de localização, métricas totais redundantes (prefixo T), categorias individuais de regras PMD e variáveis com variância zero. No File-level, CLOC foi excluída por ser constante, mantendo-se 7 variáveis.
+A seleção aplicou três critérios objetivos sobre os 113 atributos Class-level e os 12 atributos File-level. \textbf{(i) Natureza métrica}: foram retidas apenas variáveis com semântica de propriedade quantificável do código-fonte; foram descartados identificadores textuais (\texttt{ID}, \texttt{Name}, \texttt{LongName}, \texttt{Parent}, \texttt{Component}, \texttt{Path}) e metadados posicionais (\texttt{Line}, \texttt{Column}, \texttt{EndLine}, \texttt{EndColumn}), que não constituem medidas de qualidade ou de propensão a defeitos. \textbf{(ii) Variabilidade não-nula}: variáveis constantes foram excluídas, pois invalidam correlações, testes de hipótese e o cálculo do VIF; no File-level esse critério eliminou \textbf{CLOC} (\textit{Comment Lines of Code}), cuja totalidade das 4.261 instâncias é igual a zero (verificado por inspeção direta). \textbf{(iii) Não-redundância}: no Class-level, foram descartadas as variantes com prefixo \textbf{T} (totais agregados a classes aninhadas, com $r>0{,}99$ contra suas contrapartes), as variantes locais (prefixo \texttt{NL}) e proxies redundantes (CBOI, NII, NOI) já capturados por CBO/RFC; as 37 categorias granulares de regras PMD foram colapsadas nos agregados \texttt{WarningInfo} e \texttt{WarningMajor}.
+
+Restam \textbf{19 variáveis numéricas no Class-level} (Tabela~\ref{tab:selecao}) e \textbf{7 no File-level}: McCC, LLOC, \textit{Number of previous modifications}, \textit{Number of previous fixes}, \textit{Number of committers}, \textit{Number of developer commits} e a variável-alvo \textit{Number of bugs}. O total exato de sete decorre da aritmética do dataset (12 colunas $-$ 4 identificadores $-$ 1 constante), correspondendo a \emph{todas} as métricas remanescentes após os critérios (i) e (ii), sem corte subjetivo adicional.
 
 \begin{table}[H]
 \centering
 \caption{Variáveis selecionadas para análise (Class-level)}
 \label{tab:selecao}
 \footnotesize
-\begin{tabular}{llp{4.5cm}}
+\begin{tabular}{llp{7.5cm}}
 \toprule
 \textbf{Variável} & \textbf{Categoria} & \textbf{Descrição} \\
 \midrule
-WMC, NL, NLE      & Complexidade & Complexidade ponderada, aninhamento \\
-CBO, RFC          & Acoplamento  & Acoplamento entre objetos, resposta \\
-LCOM5             & Coesão       & Falta de coesão dos métodos \\
-DIT, NOC          & Herança      & Profundidade, número de filhos \\
-LOC, LLOC, NOS, NM, NA & Tamanho & Linhas, statements, métodos, atributos \\
-CC                & Clones       & Cobertura de clones \\
-CD, CLOC          & Documentação & Densidade e linhas de comentário \\
-WarningInfo, WarningMajor & Qualidade & Warnings informativos e majoritários \\
-N.\ de bugs       & Alvo         & Número de defeitos registrados \\
+WMC, NL, NLE             & Complexidade  & WMC (\textit{Weighted Methods per Class}), NL (\textit{Nesting Level}), NLE (\textit{Nesting Level Else-if}) \\
+CBO, RFC                 & Acoplamento   & CBO (\textit{Coupling Between Objects}), RFC (\textit{Response For a Class}) \\
+LCOM5                    & Coesão        & LCOM5 (\textit{Lack of Cohesion in Methods}, versão 5) \\
+DIT, NOC                 & Herança       & DIT (\textit{Depth of Inheritance Tree}), NOC (\textit{Number of Children}) \\
+LOC, LLOC, NOS, NM, NA   & Tamanho       & LOC (\textit{Lines of Code}), LLOC (\textit{Logical Lines of Code}), NOS (\textit{Number of Statements}), NM (\textit{Number of Methods}), NA (\textit{Number of Attributes}) \\
+CC                       & Clones        & CC (\textit{Clone Coverage}) --- proporção de código em clones \\
+CD, CLOC                 & Documentação  & CD (\textit{Comment Density}), CLOC (\textit{Comment Lines of Code}) \\
+WarningInfo, WarningMajor & Qualidade    & Warnings PMD agregados por severidade: \textit{Info} (informativos) e \textit{Major} (majoritários) \\
+N.\ de bugs              & Alvo          & \textit{Number of bugs} --- número de defeitos registrados \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -168,7 +176,7 @@ A análise de quartis complementa as medidas anteriores. Para WMC no Class-level
 \label{fig:boxplots_class}
 \end{figure}
 
-A Figura~\ref{fig:boxplots_class} evidencia a presença massiva de outliers em todas as métricas, padrão típico em projetos de software de grande porte. O limite inferior de detecção ($Q_1 - 1{,}5 \times \text{IQR}$) é negativo para todas as variáveis, de modo que apenas outliers superiores foram detectados. No File-level, observa-se padrão análogo: McCC ($Q_1 = 1$, $Q_3 = 6$, $P_{90} = 18$) e LLOC ($Q_1 = 20$, $Q_3 = 112$) também exibem distribuições assimétricas com outliers extremos.
+A Figura~\ref{fig:boxplots_class} evidencia a presença massiva de outliers em todas as métricas, padrão típico em projetos de software de grande porte. O limite inferior de detecção ($Q_1 - 1{,}5 \times \text{IQR}$) é negativo para todas as variáveis, de modo que apenas outliers superiores foram detectados. No File-level, é observado padrão análogo: McCC ($Q_1 = 1$, $Q_3 = 6$, $P_{90} = 18$) e LLOC ($Q_1 = 20$, $Q_3 = 112$) também exibem distribuições assimétricas com outliers extremos.
 
 \subsection{Avaliação de Outliers}
 
@@ -197,6 +205,8 @@ A proporção de outliers varia entre 5,86\% (NA) e 22,48\% (CC). Para as métri
 
 \subsection{Visualizações Gráficas}
 
+A inspeção visual das distribuições complementa as estatísticas descritivas apresentadas nas seções anteriores, evidenciando padrões de forma, simetria e relacionamento entre variáveis que medidas resumo isoladas não revelam. Esta seção apresenta os histogramas das principais métricas no nível de classe, que permitem avaliar a forma das distribuições marginais, e um gráfico de dispersão bivariada que ilustra a estrutura conjunta entre tamanho (LOC) e complexidade (WMC) --- duas dimensões fortemente correlacionadas no Neo4j.
+
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.97\textwidth]{Ap1/figuras/histogramas_class.png}
@@ -204,7 +214,13 @@ A proporção de outliers varia entre 5,86\% (NA) e 22,48\% (CC). Para as métri
 \label{fig:hist_class}
 \end{figure}
 
-Os histogramas (Figura~\ref{fig:hist_class}) confirmam distribuições fortemente assimétricas à direita, com concentração massiva em valores baixos e caudas longas, comportamento esperado em métricas de software \cite{radjenovic2013}. A distribuição de bugs é extremamente desbalanceada: apenas 8 classes (0,10\%) e 6 arquivos (0,14\%) apresentam bugs registrados.
+Os histogramas (Figura~\ref{fig:hist_class}) revelam \textbf{assimetria positiva (à direita)} em \emph{todas} as oito métricas representadas (WMC, CBO, RFC, LOC, LLOC, NOS, NM e LCOM5): grande concentração de massa em valores baixos e caudas longas estendendo-se à direita, sem qualquer ocorrência de assimetria à esquerda. A intensidade do enviesamento varia em grau: LOC, LLOC e NOS exibem as caudas mais longas (limites superiores observados de 3.207, 2.588 e 1.411, respectivamente), enquanto WMC, RFC e LCOM5 mostram pico extremo próximo de zero, com mais de 50\% das observações concentradas no primeiro \textit{bin} do histograma.
+
+Essa forma carrega três implicações estatísticas relevantes. \textbf{(a) Tendência central distorcida.} A relação $\bar{x} > \text{mediana} > \text{moda}$, já evidente na Tabela~\ref{tab:tendencia_class} (e.g., LOC: 59,70 vs.\ 25 vs.\ 7; WMC: 7,39 vs.\ 3 vs.\ 1), é o marcador algébrico clássico de assimetria positiva: a média é inflada pelas caudas e não representa o comportamento típico das classes, de modo que mediana e quartis tornam-se descritores preferíveis. \textbf{(b) Inadequação de métodos paramétricos.} Técnicas que pressupõem normalidade --- teste $t$, ANOVA, intervalos de confiança gaussianos e regressão linear sem transformação --- tornam-se enviesadas neste contexto, o que justifica adiante o uso da correlação de Spearman (baseada em postos) em complemento a Pearson e a opção por regressão logística com pesos \textit{cost-sensitive} em vez de regressão linear. \textbf{(c) Compatibilidade com distribuições típicas de software.} A combinação pico-em-zero, decaimento aproximadamente exponencial e cauda pesada é compatível com distribuições \textit{log-normal} ou de \textit{lei de potência}, padrão amplamente reportado para métricas de tamanho e acoplamento em sistemas de grande porte~\cite{radjenovic2013}.
+
+A inspeção visual converge com os testes inferenciais discutidos na Seção~\ref{sec:normalidade}: distribuições visualmente não-simétricas e sem o formato \textit{bell-shaped} característico da gaussiana fazem a estatística $W$ de Shapiro-Wilk afastar-se de 1 e a estatística $D$ de Lilliefors crescer, com $p < 10^{-50}$ uniformemente em todas as variáveis. Gráfico e teste contam a mesma história por meios diferentes, e essa convergência reforça a robustez do diagnóstico de não-normalidade.
+
+A distribuição de bugs, por sua vez, é extremamente desbalanceada: apenas 8 classes com bug (0,10\%) e 6 arquivos com bug (0,14\%) entre milhares de instâncias --- desbalanceamento que constituirá o principal fator limitante da modelagem preditiva discutida adiante.
 
 \begin{figure}[H]
 \centering
@@ -213,9 +229,9 @@ Os histogramas (Figura~\ref{fig:hist_class}) confirmam distribuições fortement
 \label{fig:disp_loc_wmc}
 \end{figure}
 
-A Figura~\ref{fig:disp_loc_wmc} apresenta a dispersão entre LOC e WMC, evidenciando a correlação forte e positiva entre tamanho e complexidade. As poucas instâncias com bugs (pontos vermelhos) tendem a se posicionar em regiões de valores moderados a altos, embora o número ínfimo de positivos (8) não permita conclusões robustas sobre a relação com defeitos.
+A Figura~\ref{fig:disp_loc_wmc} apresenta a dispersão entre LOC e WMC, evidenciando a correlação forte e positiva entre tamanho e complexidade. As poucas instâncias com bugs (pontos vermelhos) tendem a se posicionar em regiões de valores moderados a altos, embora o número ínfimo de positivos (8 classes com bug) não permita conclusões robustas sobre a relação com defeitos.
 
-\subsection{Testes de Normalidade}
+\subsection{Testes de Normalidade} \label{sec:normalidade}
 
 Para todas as variáveis, os testes de Shapiro-Wilk \cite{shapiro1965} e Lilliefors \cite{lilliefors1967} rejeitaram a hipótese nula de normalidade ($p < 10^{-50}$). A Tabela~\ref{tab:normalidade} apresenta as estatísticas para variáveis representativas.
 
@@ -238,16 +254,20 @@ CC  & 0,4754 & $< 10^{-81}$   & 0,4410 & $< 2{,}2\!\times\!10^{-16}$ \\
 \end{tabular}
 \end{table}
 
-A estatística de Shapiro-Wilk varia entre 0,013 (Number of bugs) e 0,827 (DIT), sempre muito distante de 1 (normalidade perfeita). Adotou-se o teste de Lilliefors em vez do K-S clássico com parâmetros estimados, que é anticonservativo quando os parâmetros da distribuição teórica não são conhecidos \textit{a priori} \cite{lilliefors1967}. Para o Shapiro-Wilk (limite de 5.000 obs.), utilizou-se amostra com seed=42, garantindo reprodutibilidade. A rejeição universal de normalidade justifica o uso de Spearman e implica cautela com métodos que assumem normalidade.
+A estatística de Shapiro-Wilk varia entre 0,013 (Number of bugs) e 0,827 (DIT), sempre muito distante de 1 (normalidade perfeita).
+
+A escolha pelo teste de Lilliefors \cite{lilliefors1967} em detrimento do tradicional Kolmogorov-Smirnov (K-S) decorre de uma restrição técnica do K-S clássico: sua tabela de valores críticos só é corretamente calibrada quando a média ($\mu$) e o desvio padrão ($\sigma$) da distribuição teórica de referência são fixados \textit{a priori}, antes da observação dos dados. No presente estudo, $\mu$ e $\sigma$ não são valores populacionais conhecidos para métricas como LOC, WMC ou LLOC --- precisam ser estimados a partir da própria amostra. Sob essa estimação, o K-S aplicado com a tabela padrão torna-se \textbf{excessivamente conservador}: como os parâmetros são ajustados aos dados, a distância máxima $D$ entre a função de distribuição empírica e a teórica fica artificialmente reduzida, fazendo o teste \emph{deixar de rejeitar} a hipótese nula de normalidade com mais frequência do que o nível $\alpha$ nominal indicaria. Em linguagem acessível: nessa configuração, o K-S tende a ``aceitar como normal'' distribuições que de fato não são, justamente porque a referência teórica foi ajustada para se parecer com a amostra. O teste de Lilliefors corrige essa distorção recalculando os valores críticos de modo a respeitar o nível de significância nominal mesmo quando $\mu$ e $\sigma$ são estimados amostralmente, restaurando a calibração correta da taxa de erro tipo I. Por essa razão, ambos os testes (Shapiro-Wilk e Lilliefors) foram reportados em conjunto: a convergência dos dois testes --- com $p < 10^{-50}$ em todas as variáveis --- elimina qualquer dúvida sobre a violação de normalidade.
+
+Para o Shapiro-Wilk, cuja implementação em R impõe limite de 5.000 observações, foi utilizada uma amostra aleatória extraída com \texttt{seed=42}, garantindo reprodutibilidade. A rejeição universal de normalidade justifica o uso da correlação de Spearman para análise de associações e impõe cautela quanto a métodos paramétricos que assumem distribuição normal.
 
 \subsection{Análise de Correlação}
 
-Dado que todas as variáveis violam normalidade, complementou-se a correlação de Pearson com a de Spearman (baseada em postos), mais robusta a outliers e distribuições assimétricas.
+Dado que todas as variáveis violam normalidade, a correlação de Pearson foi complementada com a de Spearman (baseada em postos), mais robusta a outliers e distribuições assimétricas.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.80\textwidth]{Ap1/figuras/correlacao_heatmap_class.png}
-\caption{Heatmap de correlação de Pearson --- Class-level}
+\caption{Correlação de Pearson --- Class-level}
 \label{fig:corr_class}
 \end{figure}
 
@@ -258,22 +278,22 @@ As correlações de Spearman (Figura~\ref{fig:corr_spearman_class}) apresentam p
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.80\textwidth]{Ap1/figuras/correlacao_spearman_class.png}
-\caption{Heatmap de correlação de Spearman --- Class-level}
+\caption{Correlação de Spearman --- Class-level}
 \label{fig:corr_spearman_class}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.80\textwidth]{Ap1/figuras/chart_correlation_class.png}
-\caption{\texttt{chart.Correlation} (PerformanceAnalytics) --- métricas principais (Class-level)}
+\caption{Correlação de Pearson com dispersões e histogramas marginais (\texttt{chart.Correlation}) --- Class-level}
 \label{fig:chart_corr}
 \end{figure}
 
-A Figura~\ref{fig:chart_corr}, gerada com o pacote \texttt{PerformanceAnalytics}, combina histogramas (diagonal), gráficos de dispersão (triângulo inferior) e coeficientes de correlação com nível de significância (triângulo superior), proporcionando uma visão integrada das relações entre variáveis. No File-level, McCC$\times$LLOC ($r = 0{,}72$) e ``N.\ previous modifications''$\times$``N.\ committers'' ($r = 0{,}77$; Spearman: $\rho = 0{,}90$) são as correlações mais fortes.
+A Figura~\ref{fig:chart_corr}, gerada com o pacote \texttt{PerformanceAnalytics} sobre o subconjunto Class-level, combina histogramas (diagonal), gráficos de dispersão (triângulo inferior) e coeficientes de correlação com nível de significância (triângulo superior), proporcionando uma visão integrada das relações entre as variáveis no nível de classe. Para o dataset File-level (figura análoga não reproduzida aqui por concisão), as correlações mais fortes ocorrem entre McCC$\times$LLOC ($r = 0{,}72$) e ``N.\ previous modifications''$\times$``N.\ committers'' ($r = 0{,}77$; Spearman: $\rho = 0{,}90$).
 
 \subsection{Análise de Multicolinearidade (VIF)}
 
-O \textit{Variance Inflation Factor} (VIF) foi calculado para quantificar formalmente a multicolinearidade entre os preditores \cite{montgomery2012}. VIF $> 10$ indica multicolinearidade severa.
+O \textit{Variance Inflation Factor} (VIF) foi calculado para quantificar formalmente a multicolinearidade entre os preditores \cite{montgomery2014}. VIF $> 10$ indica multicolinearidade severa.
 
 \begin{figure}[H]
 \centering
@@ -286,19 +306,19 @@ No Class-level, RFC (VIF = 20,18), WMC (15,17) e LOC (10,98) excederam o limiar 
 
 \subsection{Modelagem Estatística --- Regressão Logística}
 
-Optou-se por regressão logística binária com pesos \textit{cost-sensitive} inversamente proporcionais à frequência de cada classe ($w_+ = N / (2 \cdot N_+)$; $w_- = N / (2 \cdot N_-)$), evitando classificação trivial como classe majoritária.
+Foi adotada a regressão logística binária com pesos \textit{cost-sensitive} inversamente proporcionais à frequência de cada classe ($w_+ = N / (2 \cdot N_+)$; $w_- = N / (2 \cdot N_-)$), evitando classificação trivial como classe majoritária.
 
 \subsubsection{Modelo Class-level}
 
-O modelo utilizou os preditores remanescentes após remoção de VIF $> 10$: WMC, CBO, LOC, LCOM5, NL, DIT, CC. Os coeficientes apresentaram magnitude extrema (ordem $10^{12}$--$10^{15}$), indicando que o algoritmo \textbf{não convergiu} --- característica de separação completa dos dados, sintoma do desbalanceamento extremo (8 positivos em 7.917, EPV $\approx 1$). O Pseudo $R^2$ (McFadden) foi $-10{,}76$ (modelo pior que o nulo). Na escala de McFadden, valores entre 0,2 e 0,4 indicam ajuste excelente \cite{mcfadden1974}.
+O modelo utilizou os preditores remanescentes após remoção de VIF $> 10$: WMC, CBO, LOC, LCOM5, NL, DIT, CC. Os coeficientes apresentaram magnitude extrema (ordem $10^{12}$--$10^{15}$), indicando que o algoritmo \textbf{não convergiu} --- característica de separação completa dos dados, sintoma do desbalanceamento extremo (8 classes com bug em 7.917, EPV $\approx 1$). O Pseudo $R^2$ (McFadden) foi $-10{,}76$ (modelo pior que o nulo). Na escala de McFadden, valores entre 0,2 e 0,4 indicam ajuste excelente \cite{mcfadden1974}.
 
 \subsubsection{Modelo File-level}
 
-Os preditores foram: McCC, LLOC, N.\ previous modifications, N.\ previous fixes, N.\ committers e N.\ developer commits. O Pseudo $R^2$ (McFadden) foi 0,59 (excelente na escala), porém o algoritmo também não convergiu. Apenas LLOC não foi significativo ($p = 0{,}30$); os demais resultados devem ser interpretados com cautela dado o número ínfimo de positivos (6 instâncias).
+Os preditores foram: McCC, LLOC, N.\ previous modifications, N.\ previous fixes, N.\ committers e N.\ developer commits. O Pseudo $R^2$ (McFadden) foi 0,59 (excelente na escala), porém o algoritmo também não convergiu. Apenas LLOC não foi significativo ($p = 0{,}30$); os demais resultados devem ser interpretados com cautela dado o número ínfimo de positivos (6 arquivos com bug).
 
 \subsubsection{Métricas de Avaliação e Validação Cruzada}
 
-Para evitar overfitting (o modelo ajustado e avaliado no mesmo conjunto gera estimativas otimistas), implementou-se validação cruzada estratificada com 10 \textit{folds}, garantindo que cada \textit{fold} contenha pelo menos uma instância positiva. O threshold ótimo foi determinado pelo Youden Index ($J = \text{Sensit.} + \text{Espec.} - 1$).
+Para evitar overfitting (o modelo ajustado e avaliado no mesmo conjunto gera estimativas otimistas), foi implementada validação cruzada estratificada com 10 \textit{folds}, garantindo que cada \textit{fold} contenha pelo menos uma instância positiva. O threshold ótimo foi determinado pelo Youden Index ($J = \text{Sensit.} + \text{Espec.} - 1$).
 
 \begin{table}[H]
 \centering
@@ -340,11 +360,13 @@ Quanto às métricas CK: DIT e NOC possuem variância quase zero no Neo4j (desig
 % =====================================================================
 \subsection{Ameaças à Validade} \label{sec:ameacas}
 
-\textbf{Validade interna:} (i) Desbalanceamento extremo (8 e 6 positivos; EPV $\approx 1$, muito abaixo do mínimo de 10 \cite{hosmer2013}); (ii) K-S com parâmetros estimados era anticonservativo --- corrigido com Lilliefors; (iii) Multicolinearidade severa (LOC$\times$LLOC: $r = 0{,}99$) --- corrigida via VIF; (iv) Modelo avaliado no treino --- corrigido com 10-fold CV.
+\textbf{Validade interna.} (i) Desbalanceamento extremo (8 classes com bug e 6 arquivos com bug; EPV $\approx 1$, muito abaixo do mínimo de 10 \cite{hosmer2013}), responsável pela separação completa e pela não-convergência da regressão logística; (ii) K-S com parâmetros estimados seria excessivamente conservador --- corrigido com Lilliefors; (iii) Multicolinearidade severa (LOC$\times$LLOC: $r = 0{,}99$) --- corrigida via remoção iterativa de variáveis com VIF $> 10$; (iv) Modelo originalmente avaliado no próprio conjunto de treino --- corrigido com validação cruzada estratificada de 10 \textit{folds}; (v) Subamostragem aleatória para o Shapiro-Wilk (limite de 5.000 observações) com semente fixa (\texttt{seed=42}) torna a estatística reprodutível mas potencialmente sensível à amostra particular extraída --- mitigado pela convergência com Lilliefors, computado sobre a totalidade das observações.
 
-\textbf{Validade externa:} Resultados específicos ao Neo4j; dataset de versão única; possível viés de seleção do GitHub Bug Dataset (apenas bugs vinculados a commits são capturados).
+\textbf{Validade externa.} (i) Resultados restritos a um único projeto (Neo4j) em uma única versão, sem garantia de generalização para outros sistemas Java; (ii) domínio específico (banco de dados em grafo) com arquitetura estruturalmente plana --- a observação de que DIT e NOC apresentam variância quase nula é provavelmente idiossincrasia do Neo4j e não se reproduz em projetos com hierarquias de herança mais profundas; (iii) viés de captura do GitHub Bug Dataset~\cite{toth2016}: apenas defeitos vinculados a \textit{commits} de correção são registrados, deixando bugs latentes ou corrigidos sem rastreabilidade explícita ausentes da variável-alvo.
 
-\textbf{Validade de construto:} Métricas CK são proxies imperfeitos de qualidade; ``Number of bugs'' depende da completude do rastreamento; DIT e NOC com variância quase zero são irrelevantes neste contexto específico.
+\textbf{Validade de construto.} (i) Métricas CK são \textit{proxies} estruturais imperfeitos da qualidade real do software --- não capturam manutenibilidade, legibilidade ou aderência a contratos; (ii) ``\textit{Number of bugs}'' operacionaliza ``defeito'' como ``bug historicamente registrado e vinculado a \textit{commit}'', construto que pode divergir substancialmente da noção teórica de ``defeito existente''; (iii) LCOM5 possui múltiplas formulações na literatura, dificultando comparações entre estudos; (iv) a agregação de 37 categorias granulares de regras PMD nos dois rótulos \texttt{WarningInfo} e \texttt{WarningMajor} sacrifica resolução semântica por parcimônia analítica.
+
+\textbf{Validade de conclusão.} (i) Baixíssimo poder estatístico para inferências sobre a variável-alvo: com apenas 8 classes com bug e 6 arquivos com bug, qualquer teste envolvendo bugs tem alta probabilidade de erro tipo II (falhar em detectar associações reais); (ii) cerca de 170 correlações pareadas foram calculadas no Class-level sem correção formal para comparações múltiplas (Bonferroni ou FDR), elevando o risco teórico de falsos positivos entre correlações marginais --- mitigação parcial: as associações reportadas como fortes ($|r| \geq 0{,}7$) coincidem em Pearson e Spearman, conferindo robustez ao diagnóstico; (iii) os $p$-valores extremamente pequenos nos testes de normalidade ($p < 10^{-50}$) refletem em parte a sensibilidade de Shapiro-Wilk e Lilliefors a desvios mínimos quando $n$ é grande --- a leitura correta é que ``normalidade é praticamente impossível dado o tamanho amostral'', e não que o desvio absoluto seja extraordinário em magnitude prática; (iv) a confiabilidade de medição da ferramenta SourceMeter é alta por ser determinística, mas suas convenções internas (escopo de classe, contagem de linhas vazias, etc.) afetam todas as métricas de modo sistemático e não são reveladas por nenhum teste estatístico.
 
 % =====================================================================
 \section{Conclusão} \label{sec:conclusao}
