@@ -25,15 +25,17 @@
   {-12pt plus -2pt minus -2pt}{6pt plus 2pt minus 2pt}%
   {\normalfont\normalsize\bfseries}}
 
-% Abstract environment
+% Abstract environment (SBC: 12pt Times, 0.8cm indent both sides)
 \renewenvironment{abstract}%
-  {\begin{center}\small\textbf{Abstract.}\end{center}\begin{quotation}\small}%
-  {\end{quotation}}
+  {\begin{center}\fontsize{12}{14}\selectfont\textbf{Abstract.}\end{center}%
+   \list{}{\leftmargin 0.8cm \rightmargin 0.8cm}\item\relax\fontsize{12}{14}\selectfont}%
+  {\endlist}
 
-% Resumo environment
+% Resumo environment (SBC: 12pt Times, 0.8cm indent both sides)
 \newenvironment{resumo}%
-  {\begin{center}\small\textbf{Resumo.}\end{center}\begin{quotation}\small}%
-  {\end{quotation}}
+  {\begin{center}\fontsize{12}{14}\selectfont\textbf{Resumo.}\end{center}%
+   \list{}{\leftmargin 0.8cm \rightmargin 0.8cm}\item\relax\fontsize{12}{14}\selectfont}%
+  {\endlist}
 
 % Address
 \newcommand{\address}[1]{\gdef\@address{#1}}
@@ -54,5 +56,22 @@
   \end{center}%
   \par
   \vskip 12pt}
+
+% Bibliography (SBC: 12pt, 6pt space before each entry, 0.5cm hanging indent)
+\renewenvironment{thebibliography}[1]{%
+  \section*{\refname}%
+  \fontsize{12}{14}\selectfont
+  \list{}{%
+    \setlength{\labelwidth}{0pt}%
+    \setlength{\labelsep}{0pt}%
+    \setlength{\leftmargin}{0.5cm}%
+    \setlength{\itemindent}{-0.5cm}%
+    \setlength{\itemsep}{6pt}%
+    \setlength{\parsep}{0pt}%
+    \setlength{\topsep}{6pt}%
+  }%
+  \sloppy\clubpenalty4000\widowpenalty4000%
+  \sfcode`\.=\@m}%
+  {\endlist}
 
 \endinput
