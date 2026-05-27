@@ -18,6 +18,16 @@ Análise empírica quantitativa de métricas de código-fonte Java com produçã
 
 ---
 
+## 🌐 Aplicação web publicada
+
+O dashboard interativo com as métricas do framework Neo4j (módulo `api_r/`) está publicado em:
+
+**🔗 https://igormariano.shinyapps.io/Projeto-ES-Neo4j/**
+
+O site exibe publicamente os resultados das análises de métricas de código-fonte, com previsão de WMC, classificação de bugs, exploração de distribuições e matriz de correlação. O código-fonte da aplicação está em [`api_r/api.R`](api_r/api.R) e as instruções de uso em [`api_r/apiR.md`](api_r/apiR.md).
+
+---
+
 ## O que é o Neo4j?
 
 [Neo4j](https://neo4j.com/) é o sistema de banco de dados em grafo de código aberto mais utilizado no mundo. Diferente dos bancos relacionais tradicionais (SQL), o Neo4j armazena dados como **nós** (entidades) e **arestas** (relacionamentos), tornando-o ideal para modelar domínios altamente conectados — como redes sociais, sistemas de recomendação, detecção de fraudes e grafos de conhecimento.
@@ -199,3 +209,5 @@ O artigo científico está em `artigo/main.tex` e segue o **template oficial da 
 
 
 *Repositório disponível em: https://github.com/IgorMariano25/Projeto-ES-Neo4j*
+
+*Aplicação Shiny publicada em: https://igormariano.shinyapps.io/Projeto-ES-Neo4j/*
