@@ -1,6 +1,6 @@
 # Analise Estatistica de Metricas de Codigo-Fonte do Framework Neo4j
 
-Apresentacao completa do artigo sobre qualidade de software, metricas orientadas a objetos e predicao de defeitos no framework **Neo4j**, a partir do **GitHub Bug Dataset v1.1**.
+Apresentacao completa do artigo sobre qualidade de software, metricas orientadas a objetos e predicao de defeitos **Neo4j**, a partir do **GitHub Bug Dataset v1.1**.
 
 O objetivo central do trabalho nao e vender um classificador como bem-sucedido. O principal resultado e mais importante: o dataset do Neo4j, nesta versao, e **estatisticamente inadequado para predicao confiavel de defeitos**, devido ao desbalanceamento extremo da variavel-alvo.
 
